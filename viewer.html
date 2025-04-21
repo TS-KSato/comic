@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Commercial Manga Viewer</title>
     <style>
+        /* --- CSS (変更なし) --- */
         :root {
             --primary-color: #4a6cf7;
             --secondary-color: #ff6b6b;
@@ -41,83 +42,101 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--background-color);
             color: var(--text-color);
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            position: fixed;
-            touch-action: manipulation;
-            user-select: none;
+            height: 100vh; /* Use viewport height */
+            width: 100vw;  /* Use viewport width */
+            overflow: hidden; /* Prevent body scrolling */
+            position: fixed; /* Prevent pull-to-refresh */
+            touch-action: manipulation; /* Improve touch responsiveness, prevent some default actions */
+            user-select: none; /* Prevent text selection */
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE */
         }
 
         #viewer-container {
             width: 100%;
             height: 100%;
             position: relative;
-            overflow: hidden;
-            background-color: #000;
+            overflow: hidden; /* Crucial for containing zoomed content */
+            background-color: #000; /* Background for empty areas */
             display: flex;
             justify-content: center;
             align-items: center;
+            cursor: grab; /* Indicate panning possibility */
+        }
+        #viewer-container:active {
+             cursor: grabbing;
         }
 
-        #manga-page-container {
-            position: relative;
-            height: 100%;
+        /* Zoom container handles scaling and translation */
+        #zoom-container {
             width: 100%;
-            display: flex;
+            height: 100%;
+            position: absolute;
+            display: flex; /* Use flex to center manga-page-container */
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            transform-origin: center; /* Zoom from the center */
+            transition: transform 0.3s ease; /* Smooth zoom/pan transitions */
+        }
+
+        /* Manga page container holds the image(s) */
+        #manga-page-container {
+            position: relative; /* Needed for absolute positioning of pages if required */
+            height: 100%;
+            width: 100%;
+            display: flex; /* Use flex for page layout (single/double) */
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Prevent content overflow within this container */
         }
 
         .manga-page {
-            max-width: 100%;
+            display: block; /* Remove extra space below image */
+            max-width: 100%; /* Default: fit within container */
             max-height: 100%;
-            object-fit: contain;
+            object-fit: contain; /* Scale while preserving aspect ratio */
             transform-origin: center;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
+            transition: opacity 0.3s ease; /* Fade effect (optional) */
+            pointer-events: none; /* Images themselves shouldn't capture pointer events */
+            flex-shrink: 0; /* Prevent images from shrinking in flex layout */
+            background-color: #333; /* Placeholder background while loading */
         }
 
         .manga-page.hidden {
             display: none;
         }
 
+        /* Double page mode: each page takes up to 50% width */
         .manga-page.double-page-mode {
             max-width: 50%;
-            height: 100%;
+            height: 100%; /* Maintain full height */
             object-fit: contain;
         }
 
-        .manga-page.rtl {
+        /* Reading direction for double page mode using flex order */
+        .manga-page.rtl { /* Right page in RTL, Right page in LTR */
             order: 1;
         }
 
-        .manga-page.ltr {
+        .manga-page.ltr { /* Left page in RTL, Left page in LTR */
             order: 2;
         }
+
 
         /* Navigation zones */
         .nav-zone {
             position: absolute;
             height: 100%;
-            width: 30%;
+            width: 30%; /* Adjust width as needed */
             top: 0;
-            z-index: 10;
+            z-index: 10; /* Above images, below UI */
+            /* background-color: rgba(255, 0, 0, 0.1); */ /* DEBUG: Visualize zones */
         }
 
-        #prev-zone {
-            left: 0;
-        }
-
-        #next-zone {
-            right: 0;
-        }
-
-        #center-zone {
-            left: 30%;
-            width: 40%;
-        }
+        #prev-zone { left: 0; cursor: pointer; /* Or specific cursor like w-resize */}
+        #next-zone { right: 0; cursor: pointer; /* Or e-resize */}
+        #center-zone { left: 30%; width: 40%; cursor: pointer; } /* Center zone for UI toggle */
 
         /* UI Overlays */
         .ui-overlay {
@@ -127,11 +146,15 @@
             padding: 15px;
             color: var(--overlay-text);
             background-color: var(--overlay-background);
-            z-index: 20;
+            z-index: 20; /* Above nav zones */
             transition: transform 0.3s ease, opacity 0.3s ease;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            pointer-events: none; /* Allow clicks/taps to pass through overlay background */
+        }
+        .ui-overlay > * {
+            pointer-events: auto; /* Re-enable pointer events for buttons/sliders */
         }
 
         #top-overlay {
@@ -144,17 +167,21 @@
             transform: translateY(100%);
         }
 
-        .show-ui #top-overlay {
+        /* Use a class on viewer-container to control UI visibility */
+        #viewer-container.show-ui #top-overlay {
             transform: translateY(0);
+            opacity: 1;
         }
 
-        .show-ui #bottom-overlay {
+        #viewer-container.show-ui #bottom-overlay {
             transform: translateY(0);
+            opacity: 1;
         }
 
-        .ui-hidden .ui-overlay {
+        #viewer-container.ui-hidden .ui-overlay {
             opacity: 0;
-            pointer-events: none;
+            transform: translateY(-100%) /* or translateY(100%) for bottom */;
+            pointer-events: none; /* Ensure hidden UI doesn't block interaction */
         }
 
         /* Buttons and controls */
@@ -170,6 +197,7 @@
             align-items: center;
             cursor: pointer;
             transition: background-color 0.2s ease;
+            flex-shrink: 0; /* Prevent buttons shrinking */
         }
 
         .ui-button:hover,
@@ -193,27 +221,28 @@
 
         #page-slider {
             width: 100%;
-            -webkit-appearance: none;
+            height: 8px; /* Slightly thicker for easier touch */
+            cursor: pointer;
             appearance: none;
-            height: 4px;
-            border-radius: 2px;
+            -webkit-appearance: none;
             background: var(--slider-track);
+            border-radius: 4px;
             outline: none;
         }
 
         #page-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 16px;
-            height: 16px;
+            width: 18px; /* Larger thumb */
+            height: 18px;
             border-radius: 50%;
             background: var(--slider-thumb);
             cursor: pointer;
         }
 
         #page-slider::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             background: var(--slider-thumb);
             cursor: pointer;
@@ -227,20 +256,26 @@
             left: 0;
             width: 100%;
             background-color: var(--overlay-background);
-            z-index: 30;
+            color: var(--overlay-text); /* Ensure text color is set */
+            z-index: 30; /* Above UI overlays */
             padding: 20px;
             transform: translateY(100%);
             transition: transform 0.3s ease;
             border-top-left-radius: 15px;
             border-top-right-radius: 15px;
+            pointer-events: none; /* Disable pointer events when hidden */
         }
 
         #settings-panel.show {
             transform: translateY(0);
+            pointer-events: auto; /* Enable pointer events when shown */
         }
 
         .settings-group {
             margin-bottom: 20px;
+        }
+        .settings-group:last-child {
+            margin-bottom: 0; /* Remove margin from last group */
         }
 
         .settings-title {
@@ -252,13 +287,14 @@
 
         .settings-options {
             display: flex;
-            justify-content: space-between;
+            /* justify-content: space-between; */ /* Use gap for spacing */
             gap: 10px;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
         }
 
         .settings-option {
-            flex: 1;
-            padding: 10px;
+            flex: 1 1 auto; /* Allow shrinking but prefer base size */
+            padding: 10px 15px;
             background-color: var(--button-background);
             color: var(--overlay-text);
             border: none;
@@ -269,8 +305,13 @@
             transition: background-color 0.2s ease;
         }
 
+        .settings-option:hover {
+             background-color: var(--button-hover);
+        }
+
         .settings-option.active {
             background-color: var(--primary-color);
+            color: white; /* Ensure contrast */
         }
 
         /* Loading spinner */
@@ -278,21 +319,25 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            /* transform: translate(-50%, -50%); Combined with animation */
             width: 50px;
             height: 50px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            border: 4px solid rgba(255, 255, 255, 0.3); /* Slightly thicker border */
             border-radius: 50%;
             border-top-color: var(--spinner-color);
             animation: spin 1s ease-in-out infinite;
-            z-index: 40;
-            display: none;
+            z-index: 40; /* Highest index */
+            display: none; /* Hidden by default */
         }
 
         @keyframes spin {
             to {
                 transform: translate(-50%, -50%) rotate(360deg);
             }
+            /* Initial state for transform */
+             from {
+                 transform: translate(-50%, -50%) rotate(0deg);
+             }
         }
 
         /* Error message */
@@ -307,12 +352,13 @@
             border-radius: 5px;
             max-width: 80%;
             text-align: center;
-            z-index: 40;
-            display: none;
+            z-index: 40; /* Same as spinner */
+            display: none; /* Hidden by default */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
 
         #retry-button {
-            margin-top: 10px;
+            margin-top: 15px;
             padding: 8px 15px;
             background-color: white;
             color: var(--error-color);
@@ -320,86 +366,82 @@
             border-radius: 5px;
             font-weight: bold;
             cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
-
-        /* Zoom container */
-        #zoom-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: transform 0.3s ease;
+        #retry-button:hover {
+            background-color: #eee;
         }
     </style>
 </head>
 
 <body>
-    <div id="viewer-container">
+    <div id="viewer-container" class="show-ui"> <!-- Start with UI visible -->
         <!-- Zoom container -->
         <div id="zoom-container">
             <!-- Manga page container -->
             <div id="manga-page-container">
                 <!-- Pages are loaded here dynamically -->
-                <img src="/api/placeholder/500/700" alt="Manga page" class="manga-page" id="current-page">
-                <!-- For double page mode -->
-                <img src="/api/placeholder/500/700" alt="Manga page" class="manga-page hidden" id="second-page">
+                <!-- Use a placeholder or leave empty initially -->
+                <img alt="Manga page 1" class="manga-page" id="current-page">
+                <img alt="Manga page 2" class="manga-page hidden" id="second-page">
             </div>
         </div>
 
         <!-- Navigation zones -->
-        <div class="nav-zone" id="prev-zone"></div>
-        <div class="nav-zone" id="center-zone"></div>
-        <div class="nav-zone" id="next-zone"></div>
+        <div class="nav-zone" id="prev-zone" aria-label="Previous Page"></div>
+        <div class="nav-zone" id="center-zone" aria-label="Toggle UI"></div>
+        <div class="nav-zone" id="next-zone" aria-label="Next Page"></div>
 
         <!-- Top UI overlay -->
         <div class="ui-overlay" id="top-overlay">
-            <div id="content-title">Manga Title - Episode 1</div>
-            <div id="page-number">1 / 30</div>
-            <button class="ui-button" id="settings-button">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z">
-                    </path>
+            <div id="content-title">Loading...</div>
+            <div id="page-number"> - / - </div>
+            <button class="ui-button" id="settings-button" aria-label="Settings">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"></path>
                 </svg>
             </button>
         </div>
 
         <!-- Bottom UI overlay -->
         <div class="ui-overlay" id="bottom-overlay">
-            <button class="ui-button" id="prev-button">
-                <svg viewBox="0 0 24 24">
+            <button class="ui-button" id="prev-button" aria-label="Previous Page">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M15.41,16.59L10.83,12l4.58-4.59L14,6l-6,6l6,6L15.41,16.59z"></path>
                 </svg>
             </button>
 
             <div id="page-slider-container">
-                <input type="range" min="1" max="30" value="1" id="page-slider">
+                <input type="range" min="1" max="1" value="1" id="page-slider" aria-label="Page Slider">
             </div>
 
-            <button class="ui-button" id="next-button">
-                <svg viewBox="0 0 24 24">
+            <button class="ui-button" id="next-button" aria-label="Next Page">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6l6,6l-6,6L8.59,16.59z"></path>
                 </svg>
             </button>
 
-            <button class="ui-button" id="fullscreen-button">
-                <svg viewBox="0 0 24 24">
-                    <path d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z">
-                    </path>
+            <button class="ui-button" id="fullscreen-button" aria-label="Toggle Fullscreen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <!-- Add separate icons for enter/exit fullscreen for better UX -->
+                    <path id="fullscreen-enter-icon" d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z"></path>
+                    <path id="fullscreen-exit-icon" d="M5,16h3v3h2v-5H5V16z M8,5H5v5h2V7h3V5z M14,19h2v-3h3v-2h-5V19z M16,8h3V5h-2v3h-3V8z" style="display: none;"></path>
                 </svg>
             </button>
         </div>
 
         <!-- Settings panel -->
         <div id="settings-panel">
+             <button class="ui-button" id="close-settings-button" aria-label="Close Settings" style="position: absolute; top: 10px; right: 10px;">
+                 <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px;">
+                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path>
+                 </svg>
+            </button>
+
             <div class="settings-group">
                 <div class="settings-title">表示モード (Display Mode)</div>
                 <div class="settings-options">
-                    <button class="settings-option active" data-value="single" id="single-page-mode">単ページ
-                        (Single)</button>
+                    <button class="settings-option" data-value="single" id="single-page-mode">単ページ (Single)</button>
                     <button class="settings-option" data-value="double" id="double-page-mode">見開き (Double)</button>
                 </div>
             </div>
@@ -407,7 +449,7 @@
             <div class="settings-group">
                 <div class="settings-title">フィットモード (Fit Mode)</div>
                 <div class="settings-options">
-                    <button class="settings-option active" data-value="fit_screen" id="fit-screen">画面 (Screen)</button>
+                    <button class="settings-option" data-value="fit_screen" id="fit-screen">画面 (Screen)</button>
                     <button class="settings-option" data-value="fit_width" id="fit-width">幅 (Width)</button>
                     <button class="settings-option" data-value="fit_height" id="fit-height">高さ (Height)</button>
                 </div>
@@ -416,7 +458,7 @@
             <div class="settings-group">
                 <div class="settings-title">テーマ (Theme)</div>
                 <div class="settings-options">
-                    <button class="settings-option active" data-value="light" id="light-theme">ライト (Light)</button>
+                    <button class="settings-option" data-value="light" id="light-theme">ライト (Light)</button>
                     <button class="settings-option" data-value="dark" id="dark-theme">ダーク (Dark)</button>
                     <button class="settings-option" data-value="system" id="system-theme">システム (System)</button>
                 </div>
@@ -424,10 +466,10 @@
         </div>
 
         <!-- Loading spinner -->
-        <div id="loading-spinner"></div>
+        <div id="loading-spinner" aria-label="Loading" role="status"></div>
 
         <!-- Error message -->
-        <div id="error-message">
+        <div id="error-message" role="alert">
             <div id="error-text">読み込みに失敗しました。</div>
             <button id="retry-button">再試行</button>
         </div>
@@ -437,58 +479,66 @@
         // Main viewer class
         class MangaViewer {
             constructor() {
-                // DOM elements
-                this.viewerContainer = document.getElementById('viewer-container');
-                this.zoomContainer = document.getElementById('zoom-container');
-                this.pageContainer = document.getElementById('manga-page-container');
-                this.currentPage = document.getElementById('current-page');
-                this.secondPage = document.getElementById('second-page');
-                this.topOverlay = document.getElementById('top-overlay');
-                this.bottomOverlay = document.getElementById('bottom-overlay');
-                this.pageSlider = document.getElementById('page-slider');
-                this.pageNumber = document.getElementById('page-number');
-                this.contentTitle = document.getElementById('content-title');
-                this.loadingSpinner = document.getElementById('loading-spinner');
-                this.errorMessage = document.getElementById('error-message');
-                this.errorText = document.getElementById('error-text');
-                this.retryButton = document.getElementById('retry-button');
-                this.settingsPanel = document.getElementById('settings-panel');
+                // DOM elements (use helper function for robustness)
+                this.viewerContainer = this.getElement('viewer-container');
+                this.zoomContainer = this.getElement('zoom-container');
+                this.pageContainer = this.getElement('manga-page-container');
+                this.currentPage = this.getElement('current-page');
+                this.secondPage = this.getElement('second-page');
+                this.topOverlay = this.getElement('top-overlay');
+                this.bottomOverlay = this.getElement('bottom-overlay');
+                this.pageSlider = this.getElement('page-slider');
+                this.pageNumber = this.getElement('page-number');
+                this.contentTitle = this.getElement('content-title');
+                this.loadingSpinner = this.getElement('loading-spinner');
+                this.errorMessage = this.getElement('error-message');
+                this.errorText = this.getElement('error-text');
+                this.retryButton = this.getElement('retry-button');
+                this.settingsPanel = this.getElement('settings-panel');
 
                 // Navigation zones
-                this.prevZone = document.getElementById('prev-zone');
-                this.nextZone = document.getElementById('next-zone');
-                this.centerZone = document.getElementById('center-zone');
+                this.prevZone = this.getElement('prev-zone');
+                this.nextZone = this.getElement('next-zone');
+                this.centerZone = this.getElement('center-zone');
 
                 // Buttons
-                this.prevButton = document.getElementById('prev-button');
-                this.nextButton = document.getElementById('next-button');
-                this.fullscreenButton = document.getElementById('fullscreen-button');
-                this.settingsButton = document.getElementById('settings-button');
+                this.prevButton = this.getElement('prev-button');
+                this.nextButton = this.getElement('next-button');
+                this.fullscreenButton = this.getElement('fullscreen-button');
+                this.fullscreenEnterIcon = this.getElement('fullscreen-enter-icon');
+                this.fullscreenExitIcon = this.getElement('fullscreen-exit-icon');
+                this.settingsButton = this.getElement('settings-button');
+                this.closeSettingsButton = this.getElement('close-settings-button');
+
 
                 // Settings options
-                this.singlePageMode = document.getElementById('single-page-mode');
-                this.doublePageMode = document.getElementById('double-page-mode');
-                this.fitScreen = document.getElementById('fit-screen');
-                this.fitWidth = document.getElementById('fit-width');
-                this.fitHeight = document.getElementById('fit-height');
-                this.lightTheme = document.getElementById('light-theme');
-                this.darkTheme = document.getElementById('dark-theme');
-                this.systemTheme = document.getElementById('system-theme');
+                this.singlePageMode = this.getElement('single-page-mode');
+                this.doublePageMode = this.getElement('double-page-mode');
+                this.fitScreen = this.getElement('fit-screen');
+                this.fitWidth = this.getElement('fit-width');
+                this.fitHeight = this.getElement('fit-height');
+                this.lightTheme = this.getElement('light-theme');
+                this.darkTheme = this.getElement('dark-theme');
+                this.systemTheme = this.getElement('system-theme');
 
                 // State variables
                 this.currentPageIndex = 0;
-                this.totalPages = 30; // Default, will be updated from API
+                this.totalPages = 0; // Initialized later
+                this.allPages = []; // Combined list of pages for the current content
                 this.isDoublePage = false; // Default to single page mode
-                this.readingDirection = 'rtl'; // Default to right-to-left (Japanese manga)
+                this.readingDirection = 'rtl'; // Default, updated from data
                 this.fitMode = 'fit_screen'; // Default fit mode
                 this.theme = 'light'; // Default theme
-                this.isUIVisible = true;
+                this.isUIVisible = true; // Start with UI visible
                 this.isSettingsVisible = false;
                 this.uiHideTimeout = null;
+                this.isLoading = false; // Prevent multiple loads
 
                 // Touch handling variables
                 this.touchStartX = 0;
                 this.touchStartY = 0;
+                this.panStartX = 0; // For panning when zoomed
+                this.panStartY = 0;
                 this.lastTapTime = 0;
 
                 // Zoom variables
@@ -496,751 +546,981 @@
                 this.translateX = 0;
                 this.translateY = 0;
                 this.initialDistance = 0;
-                this.isZooming = false;
+                this.isZooming = false; // Flag for pinch zoom gesture
+                this.isPanning = false; // Flag for pan gesture while zoomed
 
-                // Mock manga data (would come from API)
+                // Mock manga data (replace with actual API call)
                 this.mangaData = {
                     id: 'manga123',
                     title: 'KARMA',
                     frontMatter: [
-                        { page_number: 1, image_url: 'i_001.jpg', type: 'cover' },
-                        { page_number: 2, image_url: 'i_002.jpg', type: 'contents' }
+                        { page_number: 1, image_url: 'https://via.placeholder.com/800x1200/CCCCCC/000000?text=Cover+Page+1', type: 'cover' },
+                        // { page_number: 2, image_url: 'https://via.placeholder.com/800x1200/AAAAAA/000000?text=Contents+Page+2', type: 'contents' }
                     ],
                     episodes: [
                         {
                             id: 'episode1',
-                            title: '第1話 (Episode 1)',
-                            pages: [
-                                { page_number: 3, image_url: 'i_003.jpg' },
-                                { page_number: 4, image_url: 'i_004.jpg' },
-                                { page_number: 5, image_url: 'i_005.jpg' },
-                                { page_number: 6, image_url: 'i_006.jpg' },
-                                { page_number: 7, image_url: 'i_007.jpg' },
-                                { page_number: 8, image_url: 'i_008.jpg' },
-                                { page_number: 9, image_url: 'i_009.jpg' },
-                                { page_number: 10, image_url: 'i_010.jpg' },
-                                { page_number: 1, image_url: 'i_011.jpg' },
-                                { page_number: 2, image_url: 'i_012.jpg' },
-                                { page_number: 3, image_url: 'i_013.jpg' }
-                            ]
+                            title: '第1話',
+                            pages: Array.from({ length: 10 }, (_, i) => ({
+                                page_number: i + 3, // Start page number from 3 for this episode
+                                image_url: `https://via.placeholder.com/800x1200/${Math.floor(Math.random()*16777215).toString(16)}/000?text=Ep1+Page+${i + 1}`
+                            }))
                         },
-                        {
+                         {
                             id: 'episode2',
-                            title: '第2話 (Episode 2)',
-                            pages: [
-
-                                { page_number: 4, image_url: 'i_014.jpg' },
-                                { page_number: 5, image_url: 'i_015.jpg' },
-                                { page_number: 6, image_url: 'i_016.jpg' },
-                                { page_number: 7, image_url: 'i_017.jpg' },
-                                { page_number: 8, image_url: 'i_018.jpg' },
-                                { page_number: 9, image_url: 'i_019.jpg' },
-                                { page_number: 10, image_url: 'i_020.jpg' },
-                                { page_number: 1, image_url: 'i_021.jpg' },
-                                { page_number: 2, image_url: 'i_022.jpg' }
-                            ]
+                            title: '第2話',
+                            pages: Array.from({ length: 8 }, (_, i) => ({
+                                page_number: i + 1,
+                                image_url: `https://via.placeholder.com/800x1200/${Math.floor(Math.random()*16777215).toString(16)}/000?text=Ep2+Page+${i + 1}`
+                            }))
                         },
-                        {
-                            id: 'episode3',
-                            title: '第3話 (Episode 3)',
-                            pages: [
-
-                                { page_number: 3, image_url: 'i_023.jpg' },
-                                { page_number: 4, image_url: 'i_024.jpg' },
-                                { page_number: 5, image_url: 'i_025.jpg' },
-                                { page_number: 6, image_url: 'i_026.jpg' },
-                                { page_number: 7, image_url: 'i_027.jpg' },
-                                { page_number: 8, image_url: 'i_028.jpg' },
-                                { page_number: 9, image_url: 'i_029.jpg' },
-                                { page_number: 1, image_url: 'i_030.jpg' },
-                                { page_number: 2, image_url: 'i_031.jpg' }
-                            ]
-                        },
-                        {
-                            id: 'episode4',
-                            title: '第4話 (Episode 4)',
-                            pages: [
-
-                                { page_number: 3, image_url: 'i_032.jpg' },
-                                { page_number: 4, image_url: 'i_033.jpg' },
-                                { page_number: 5, image_url: 'i_034.jpg' },
-                                { page_number: 6, image_url: 'i_035.jpg' },
-                                { page_number: 7, image_url: 'i_036.jpg' },
-                                { page_number: 8, image_url: 'i_037.jpg' },
-                                { page_number: 9, image_url: 'i_038.jpg' },
-                                { page_number: 10, image_url: 'i_039.jpg' },
-                                { page_number: 1, image_url: 'i_040.jpg' }
-                            ]
-                        },
-                        {
-                            id: 'episode5',
-                            title: '第5話 (Episode 5)',
-                            pages: [
-
-                                { page_number: 2, image_url: 'i_041.jpg' },
-                                { page_number: 3, image_url: 'i_042.jpg' },
-                                { page_number: 4, image_url: 'i_043.jpg' },
-                                { page_number: 5, image_url: 'i_044.jpg' },
-                                { page_number: 6, image_url: 'i_045.jpg' },
-                                { page_number: 7, image_url: 'i_046.jpg' },
-                                { page_number: 8, image_url: 'i_047.jpg' },
-                                { page_number: 9, image_url: 'i_048.jpg' }
-                            ]
-                        }
+                       // Add more episodes as needed
                     ],
-                    currentEpisodeIndex: 0, // 現在表示中のエピソードインデックス
-                    reading_direction: 'rtl'
+                    currentEpisodeIndex: 0, // Start with the first episode
+                    reading_direction: 'rtl' // Explicitly set reading direction
                 };
+
+                // Check if all essential elements were found
+                if (!this.viewerContainer || !this.currentPage || !this.secondPage) {
+                    console.error("初期化エラー: 必須のDOM要素が見つかりません。");
+                    this.showError("ビューアの初期化に失敗しました。ページをリロードしてください。");
+                    // Prevent further initialization
+                    return;
+                }
 
                 // Initialize the viewer
                 this.init();
             }
 
-            init() {
-                // Load manga data (mock for demo)
-                this.loadMangaData();
-
-                // Set up event listeners
-                this.setupEventListeners();
-
-                // Apply initial settings
-                this.loadSavedSettings();
-                this.applyTheme();
-                this.applyFitMode();
-
-                // Show UI initially and set timer to hide
-                this.showUI();
+            // Helper to get element by ID and log error if not found
+            getElement(id) {
+                const element = document.getElementById(id);
+                if (!element) {
+                    console.warn(`Element with ID '${id}' not found.`);
+                }
+                return element;
             }
 
-            loadMangaData() {
-                // In a real app, this would fetch data from the API
-                // For demo, we're using mock data
+            init() {
+                // 1. Setup event listeners first (only once)
+                this.setupEventListeners();
+
+                // 2. Load saved settings and apply theme/initial state
+                this.loadSavedSettings(); // Load theme, page mode, fit mode from memory/storage
+                this.applyTheme();      // Apply the loaded or default theme
+                // Initial page mode and fit mode will be applied after data load
+
+                // 3. Load manga data and display the first/bookmarked page
+                this.loadMangaData(); // This triggers the initial page load
+
+                // 4. Show UI initially and set timer to hide
+                this.scheduleUiHide(); // Use a separate function for clarity
+            }
+
+             // Mock function to simulate fetching data
+            async fetchMangaData() {
+                // In a real app, this would be an actual fetch request
                 this.loadingSpinner.style.display = 'block';
+                this.errorMessage.style.display = 'none';
+                this.isLoading = true;
+                console.log("Fetching manga data...");
 
-                // Simulate API call
-                setTimeout(() => {
-                    // Update content info
-                    const currentEpisode = this.mangaData.episodes[this.mangaData.currentEpisodeIndex];
-                    this.totalPages = currentEpisode.pages.length;
-                    this.contentTitle.textContent = `${this.mangaData.title} - ${currentEpisode.title}`;
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        try {
+                            // Simulate potential API error
+                            // if (Math.random() > 0.8) {
+                            //     throw new Error("Simulated network error");
+                            // }
+                             console.log("Data fetched (simulated)");
+                             this.isLoading = false;
+                             resolve(this.mangaData); // Resolve with the mock data
+                        } catch (error) {
+                            console.error("Error fetching manga data:", error);
+                            this.isLoading = false;
+                            reject(error);
+                        }
+                    }, 500); // Simulate network delay
+                });
+            }
 
-                    // Update slider
+
+            async loadMangaData() {
+                if (this.isLoading) return; // Prevent concurrent loads
+
+                try {
+                    const data = await this.fetchMangaData();
+
+                    // --- Process Data ---
+                    const currentEpisodeIndex = data.currentEpisodeIndex ?? 0;
+                    const currentEpisode = data.episodes?.[currentEpisodeIndex];
+
+                    if (!currentEpisode || !currentEpisode.pages) {
+                        throw new Error("有効なエピソードデータが見つかりません。");
+                    }
+
+                    // Combine front matter and current episode pages
+                    this.allPages = [
+                        ...(data.frontMatter || []),
+                        ...currentEpisode.pages
+                    ];
+                    this.totalPages = this.allPages.length;
+
+                    if (this.totalPages === 0) {
+                        throw new Error("表示できるページがありません。");
+                    }
+
+                    // Set reading direction from data or default to RTL
+                    this.readingDirection = data.reading_direction || 'rtl';
+
+                    // Update UI elements
+                    this.contentTitle.textContent = `${data.title || 'Manga'} - ${currentEpisode.title || 'Episode'}`;
                     this.pageSlider.max = this.totalPages;
+                    this.pageSlider.min = 1; // Ensure min is 1
+                    this.pageSlider.value = this.currentPageIndex + 1; // Set initial slider value
 
-                    // Update page display
-                    this.updatePageNumber();
-                    this.loadPage(this.currentPageIndex);
+                    // Apply saved or default settings affecting layout
+                    this.setPageMode(this.isDoublePage ? 'double' : 'single', false); // Apply mode without saving again
+                    this.setFitMode(this.fitMode, false); // Apply fit mode
 
-                    // Load bookmarks after loading data
-                    this.loadBookmark();
+                    // --- Load Initial/Bookmarked Page ---
+                    // Load bookmark *after* totalPages is set, *before* loading page
+                    this.loadBookmark(); // This might change currentPageIndex
 
-                    // Hide loading spinner
+                    // Load the determined page
+                    this.loadPage(this.currentPageIndex); // Load the initial or bookmarked page
+                    this.updatePageNumber(); // Update UI after index is confirmed
+
+                    this.loadingSpinner.style.display = 'none';
+
+                } catch (error) {
+                    console.error("Error processing manga data:", error);
+                    this.showError(`データの読み込みまたは処理に失敗しました: ${error.message}`);
                     this.loadingSpinner.style.display = 'none';
                 }
+            }
 
-    setupEventListeners() {
-                    // Navigation zones
-                    this.prevZone.addEventListener('click', () => this.prevPage());
-                    this.nextZone.addEventListener('click', () => this.nextPage());
-                    this.centerZone.addEventListener('click', () => this.toggleUI());
 
-                    // Buttons
-                    this.prevButton.addEventListener('click', () => this.prevPage());
-                    this.nextButton.addEventListener('click', () => this.nextPage());
-                    this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
-                    this.settingsButton.addEventListener('click', () => this.toggleSettings());
+            setupEventListeners() {
+                // Navigation zones (Click/Tap)
+                this.prevZone.addEventListener('click', this.prevPage.bind(this));
+                this.nextZone.addEventListener('click', this.nextPage.bind(this));
+                this.centerZone.addEventListener('click', this.toggleUI.bind(this));
 
-                    // Slider
-                    this.pageSlider.addEventListener('input', () => {
-                        this.goToPage(parseInt(this.pageSlider.value) - 1);
-                    });
+                // Buttons
+                this.prevButton.addEventListener('click', this.prevPage.bind(this));
+                this.nextButton.addEventListener('click', this.nextPage.bind(this));
+                this.fullscreenButton.addEventListener('click', this.toggleFullscreen.bind(this));
+                this.settingsButton.addEventListener('click', this.toggleSettings.bind(this));
+                this.closeSettingsButton?.addEventListener('click', this.toggleSettings.bind(this)); // Close button for settings
 
-                    // Retry button
-                    this.retryButton.addEventListener('click', () => {
-                        this.errorMessage.style.display = 'none';
-                        this.loadMangaData();
-                    });
+                // Slider
+                this.pageSlider.addEventListener('input', this.onSliderInput.bind(this));
+                this.pageSlider.addEventListener('change', this.onSliderChange.bind(this)); // Go to page when dragging stops
 
-                    // Settings options
-                    this.singlePageMode.addEventListener('click', () => this.setPageMode('single'));
-                    this.doublePageMode.addEventListener('click', () => this.setPageMode('double'));
-                    this.fitScreen.addEventListener('click', () => this.setFitMode('fit_screen'));
-                    this.fitWidth.addEventListener('click', () => this.setFitMode('fit_width'));
-                    this.fitHeight.addEventListener('click', () => this.setFitMode('fit_height'));
-                    this.lightTheme.addEventListener('click', () => this.setTheme('light'));
-                    this.darkTheme.addEventListener('click', () => this.setTheme('dark'));
-                    this.systemTheme.addEventListener('click', () => this.setTheme('system'));
+                // Retry button
+                this.retryButton.addEventListener('click', this.retryLoad.bind(this));
 
-                    // Touch events for swipe navigation
-                    this.viewerContainer.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
-                    this.viewerContainer.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false }); // パッシブモードをfalseに変更
-                    this.viewerContainer.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: true });
+                // Settings options
+                this.singlePageMode.addEventListener('click', () => this.setPageMode('single'));
+                this.doublePageMode.addEventListener('click', () => this.setPageMode('double'));
+                this.fitScreen.addEventListener('click', () => this.setFitMode('fit_screen'));
+                this.fitWidth.addEventListener('click', () => this.setFitMode('fit_width'));
+                this.fitHeight.addEventListener('click', () => this.setFitMode('fit_height'));
+                this.lightTheme.addEventListener('click', () => this.setTheme('light'));
+                this.darkTheme.addEventListener('click', () => this.setTheme('dark'));
+                this.systemTheme.addEventListener('click', () => this.setTheme('system'));
 
-                    // Pinch zoom events
-                    this.viewerContainer.addEventListener('touchstart', (e) => this.handleZoomStart(e), { passive: true });
-                    this.viewerContainer.addEventListener('touchmove', (e) => this.handleZoomMove(e), { passive: true });
-                    this.viewerContainer.addEventListener('touchend', (e) => this.handleZoomEnd(e), { passive: true });
+                // Touch events for swipe, pinch zoom, pan
+                this.viewerContainer.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
+                this.viewerContainer.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false }); // Need false to prevent scroll during pan/zoom
+                this.viewerContainer.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: true });
+                 // Handle touch cancel (e.g., if touch moves outside window)
+                this.viewerContainer.addEventListener('touchcancel', this.handleTouchCancel.bind(this), { passive: true });
 
-                    // Double tap for zoom
-                    this.viewerContainer.addEventListener('touchend', (e) => this.handleDoubleTap(e), { passive: true });
 
-                    // Window resize event
-                    window.addEventListener('resize', () => this.handleResize());
+                // Keyboard navigation (optional)
+                document.addEventListener('keydown', this.handleKeyDown.bind(this));
 
-                    // Theme detection
-                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-                        if (this.theme === 'system') {
-                            this.applyTheme();
-                        }
-                    });
-                }
+                // Window resize event
+                window.addEventListener('resize', this.handleResize.bind(this));
 
-    // メモリ内に設定を保持する変数
-    static userSettings = {
-                    pageMode: 'single',
-                    fitMode: 'fit_screen',
-                    theme: 'light'
-                };
+                // Fullscreen change event
+                 document.addEventListener('fullscreenchange', this.updateFullscreenIcon.bind(this));
+                 document.addEventListener('webkitfullscreenchange', this.updateFullscreenIcon.bind(this)); // Safari
 
-                loadSavedSettings() {
-                    // メモリ内の設定を使用
-                    try {
-                        const settings = MangaViewer.userSettings;
-
-                        // 設定を適用
-                        if (settings.pageMode) this.setPageMode(settings.pageMode, false);
-                        if (settings.fitMode) this.setFitMode(settings.fitMode, false);
-                        if (settings.theme) this.setTheme(settings.theme, false);
-                    } catch (error) {
-                        console.error('Error loading saved settings:', error);
-                    }
-                }
-
-                saveSettings() {
-                    // メモリ内の変数に設定を保存
-                    try {
-                        MangaViewer.userSettings = {
-                            pageMode: this.isDoublePage ? 'double' : 'single',
-                            fitMode: this.fitMode,
-                            theme: this.theme
-                        };
-                    } catch (error) {
-                        console.error('Error saving settings:', error);
-                    }
-                }
-
-                showUI() {
-                    // Show UI overlays
-                    this.viewerContainer.classList.add('show-ui');
-                    this.viewerContainer.classList.remove('ui-hidden');
-                    this.isUIVisible = true;
-
-                    // Clear any existing timeout
-                    if (this.uiHideTimeout) {
-                        clearTimeout(this.uiHideTimeout);
-                    }
-
-                    // Set timeout to hide UI after inactivity
-                    this.uiHideTimeout = setTimeout(() => {
-                        this.hideUI();
-                    }, 3000);
-                }
-
-                hideUI() {
-                    // Hide UI overlays
-                    this.viewerContainer.classList.add('ui-hidden');
-                    this.isUIVisible = false;
-
-                    // Also hide settings if open
-                    if (this.isSettingsVisible) {
-                        this.toggleSettings();
-                    }
-                }
-
-                toggleUI() {
-                    if (this.isUIVisible) {
-                        this.hideUI();
-                    } else {
-                        this.showUI();
-                    }
-                }
-
-                toggleSettings() {
-                    if (this.isSettingsVisible) {
-                        this.settingsPanel.classList.remove('show');
-                        this.isSettingsVisible = false;
-                    } else {
-                        this.settingsPanel.classList.add('show');
-                        this.isSettingsVisible = true;
-                        this.showUI(); // Make sure UI is visible when showing settings
-                    }
-                }
-
-                setPageMode(mode, save = true) {
-                    this.isDoublePage = mode === 'double';
-
-                    // Update active button
-                    this.singlePageMode.classList.toggle('active', !this.isDoublePage);
-                    this.doublePageMode.classList.toggle('active', this.isDoublePage);
-
-                    // Apply the page mode
-                    this.updatePageDisplay();
-
-                    // Save settings if needed
-                    if (save) this.saveSettings();
-                }
-
-                setFitMode(mode, save = true) {
-                    this.fitMode = mode;
-
-                    // Update active button
-                    this.fitScreen.classList.toggle('active', mode === 'fit_screen');
-                    this.fitWidth.classList.toggle('active', mode === 'fit_width');
-                    this.fitHeight.classList.toggle('active', mode === 'fit_height');
-
-                    // Apply the fit mode
-                    this.applyFitMode();
-
-                    // Save settings if needed
-                    if (save) this.saveSettings();
-                }
-
-                applyFitMode() {
-                    // Reset zoom first
-                    this.resetZoom();
-
-                    // Apply fit mode to current page(s)
-                    switch (this.fitMode) {
-                        case 'fit_width':
-                            // Set width to 100% and height to auto
-                            this.currentPage.style.width = '100%';
-                            this.currentPage.style.height = 'auto';
-                            this.secondPage.style.width = '100%';
-                            this.secondPage.style.height = 'auto';
-                            break;
-                        case 'fit_height':
-                            // Set height to 100% and width to auto
-                            this.currentPage.style.width = 'auto';
-                            this.currentPage.style.height = '100%';
-                            this.secondPage.style.width = 'auto';
-                            this.secondPage.style.height = '100%';
-                            break;
-                        case 'fit_screen':
-                        default:
-                            // Reset to default (constrained to container)
-                            this.currentPage.style.width = '';
-                            this.currentPage.style.height = '';
-                            this.secondPage.style.width = '';
-                            this.secondPage.style.height = '';
-                            break;
-                    }
-                }
-
-                setTheme(theme, save = true) {
-                    this.theme = theme;
-
-                    // Update active button
-                    this.lightTheme.classList.toggle('active', theme === 'light');
-                    this.darkTheme.classList.toggle('active', theme === 'dark');
-                    this.systemTheme.classList.toggle('active', theme === 'system');
-
-                    // Apply the theme
-                    this.applyTheme();
-
-                    // Save settings if needed
-                    if (save) this.saveSettings();
-                }
-
-                applyTheme() {
-                    let effectiveTheme = this.theme;
-
-                    // If system theme, check system preference
+                // Theme detection
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
                     if (this.theme === 'system') {
-                        effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                        this.applyTheme();
                     }
+                });
+            }
 
-                    // Apply theme to document body
-                    document.body.dataset.theme = effectiveTheme;
+            // In-memory settings store (replace with localStorage for persistence)
+            // NOTE: Data is lost on page reload.
+            static userSettings = {
+                pageMode: 'single',
+                fitMode: 'fit_screen',
+                theme: 'system' // Default to system preference
+            };
+            // In-memory bookmark store (replace with localStorage or server-side)
+            // NOTE: Data is lost on page reload.
+            static bookmarks = {};
+
+            loadSavedSettings() {
+                try {
+                    // Load from static variable (or localStorage if implemented)
+                    const settings = MangaViewer.userSettings;
+                    // Apply loaded settings (don't save again during initial load)
+                    if (settings.pageMode) this.isDoublePage = settings.pageMode === 'double';
+                    if (settings.fitMode) this.fitMode = settings.fitMode;
+                    if (settings.theme) this.theme = settings.theme;
+
+                    // Update UI elements to reflect loaded settings
+                    this.updateSettingsUI();
+
+                } catch (error) {
+                    console.error('Error loading saved settings:', error);
+                    // Use defaults if loading fails
+                    this.isDoublePage = false;
+                    this.fitMode = 'fit_screen';
+                    this.theme = 'system';
+                     this.updateSettingsUI();
                 }
+            }
 
-                toggleFullscreen() {
-                    if (!document.fullscreenElement) {
-                        // Enter fullscreen mode
-                        if (this.viewerContainer.requestFullscreen) {
-                            this.viewerContainer.requestFullscreen();
-                        } else if (this.viewerContainer.webkitRequestFullscreen) { // Safari
-                            this.viewerContainer.webkitRequestFullscreen();
-                        } else if (this.viewerContainer.msRequestFullscreen) { // IE11
-                            this.viewerContainer.msRequestFullscreen();
-                        }
-                    } else {
-                        // Exit fullscreen mode
-                        if (document.exitFullscreen) {
-                            document.exitFullscreen();
-                        } else if (document.webkitExitFullscreen) { // Safari
-                            document.webkitExitFullscreen();
-                        } else if (document.msExitFullscreen) { // IE11
-                            document.msExitFullscreen();
-                        }
+            saveSettings() {
+                try {
+                    // Save to static variable (or localStorage)
+                    MangaViewer.userSettings = {
+                        pageMode: this.isDoublePage ? 'double' : 'single',
+                        fitMode: this.fitMode,
+                        theme: this.theme
+                    };
+                     console.log('Settings saved (in memory):', MangaViewer.userSettings);
+                } catch (error) {
+                    console.error('Error saving settings:', error);
+                }
+            }
+
+             updateSettingsUI() {
+                // Update page mode buttons
+                this.singlePageMode.classList.toggle('active', !this.isDoublePage);
+                this.doublePageMode.classList.toggle('active', this.isDoublePage);
+                // Update fit mode buttons
+                this.fitScreen.classList.toggle('active', this.fitMode === 'fit_screen');
+                this.fitWidth.classList.toggle('active', this.fitMode === 'fit_width');
+                this.fitHeight.classList.toggle('active', this.fitMode === 'fit_height');
+                // Update theme buttons
+                this.lightTheme.classList.toggle('active', this.theme === 'light');
+                this.darkTheme.classList.toggle('active', this.theme === 'dark');
+                this.systemTheme.classList.toggle('active', this.theme === 'system');
+            }
+
+
+            showUI(autoHide = true) {
+                this.viewerContainer.classList.add('show-ui');
+                this.viewerContainer.classList.remove('ui-hidden');
+                this.isUIVisible = true;
+                this.clearUiHideTimeout(); // Clear existing timer
+
+                if (autoHide) {
+                    this.scheduleUiHide(); // Set timer to hide UI automatically
+                }
+            }
+
+            hideUI() {
+                // Don't hide if settings panel is open
+                if (this.isSettingsVisible) return;
+
+                this.viewerContainer.classList.add('ui-hidden');
+                // Optionally remove 'show-ui' after transition ends for performance
+                // this.viewerContainer.classList.remove('show-ui');
+                this.isUIVisible = false;
+                this.clearUiHideTimeout();
+            }
+
+            toggleUI() {
+                if (this.isUIVisible && !this.isSettingsVisible) {
+                    this.hideUI();
+                } else {
+                    this.showUI(); // Show UI and schedule auto-hide
+                }
+            }
+
+            scheduleUiHide() {
+                this.clearUiHideTimeout();
+                this.uiHideTimeout = setTimeout(() => {
+                    // Check again if settings are open before hiding
+                    if (!this.isSettingsVisible) {
+                        this.hideUI();
+                    }
+                }, 3000); // Hide after 3 seconds of inactivity
+            }
+
+            clearUiHideTimeout() {
+                if (this.uiHideTimeout) {
+                    clearTimeout(this.uiHideTimeout);
+                    this.uiHideTimeout = null;
+                }
+            }
+
+
+            toggleSettings() {
+                this.isSettingsVisible = !this.isSettingsVisible;
+                this.settingsPanel.classList.toggle('show', this.isSettingsVisible);
+
+                if (this.isSettingsVisible) {
+                    this.showUI(false); // Show UI but don't schedule auto-hide
+                    this.clearUiHideTimeout(); // Prevent UI from hiding while settings are open
+                } else {
+                    this.scheduleUiHide(); // Schedule UI hide when settings are closed
+                }
+            }
+
+             setPageMode(mode, save = true) {
+                const newIsDoublePage = mode === 'double';
+                if (newIsDoublePage === this.isDoublePage) return; // No change
+
+                this.isDoublePage = newIsDoublePage;
+                this.updateSettingsUI(); // Update button state
+
+                // Reload the current page with the new mode
+                // Need to potentially adjust index if switching to single page from an even index
+                // Example: If on pages 4-5 (index 3) and switch to single, should stay on page 4 (index 3)
+                this.loadPage(this.currentPageIndex);
+                this.updatePageNumber(); // Page count might appear different in UI (1 vs 2 pages shown)
+
+                if (save) this.saveSettings();
+            }
+
+            setFitMode(mode, save = true) {
+                if (mode === this.fitMode) return; // No change
+
+                this.fitMode = mode;
+                this.updateSettingsUI();
+                this.applyFitMode(); // Apply immediately
+                if (save) this.saveSettings();
+            }
+
+            applyFitMode() {
+                 // Reset specific width/height styles before applying new mode
+                 [this.currentPage, this.secondPage].forEach(img => {
+                     if(img) {
+                         img.style.width = '';
+                         img.style.height = '';
+                         img.style.objectFit = 'contain'; // Ensure contain is the base
+                     }
+                 });
+
+                // Reset zoom when changing fit mode
+                this.resetZoom();
+
+                switch (this.fitMode) {
+                    case 'fit_width':
+                        // Let max-width: 100% (or 50% in double) handle width, adjust height
+                        [this.currentPage, this.secondPage].forEach(img => {
+                           if(img) img.style.height = 'auto'; // Allow natural height based on width
+                        });
+                        // Note: CSS already handles max-width based on .double-page-mode
+                        break;
+                    case 'fit_height':
+                        // Let max-height: 100% handle height, adjust width
+                         [this.currentPage, this.secondPage].forEach(img => {
+                           if(img) img.style.width = 'auto'; // Allow natural width based on height
+                        });
+                        break;
+                     case 'fit_screen':
+                    default:
+                        // Default 'contain' behavior handled by CSS (max-width/max-height 100%)
+                        break;
+                }
+            }
+
+             setTheme(theme, save = true) {
+                 if (theme === this.theme) return; // No change
+                 this.theme = theme;
+                 this.updateSettingsUI();
+                 this.applyTheme();
+                 if (save) this.saveSettings();
+            }
+
+            applyTheme() {
+                let effectiveTheme = this.theme;
+                if (this.theme === 'system') {
+                    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                // Use dataset on the root element (html) or body
+                document.documentElement.dataset.theme = effectiveTheme;
+            }
+
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    // Enter fullscreen
+                    const element = this.viewerContainer; // Fullscreen the container
+                    if (element.requestFullscreen) {
+                        element.requestFullscreen();
+                    } else if (element.webkitRequestFullscreen) { // Safari
+                        element.webkitRequestFullscreen();
+                    }
+                } else {
+                    // Exit fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) { // Safari
+                        document.webkitExitFullscreen();
                     }
                 }
+            }
 
-                updatePageNumber() {
-                    this.pageNumber.textContent = `${this.currentPageIndex + 1} / ${this.totalPages}`;
-                    this.pageSlider.value = this.currentPageIndex + 1;
+            updateFullscreenIcon() {
+                 const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                 if (this.fullscreenEnterIcon && this.fullscreenExitIcon) {
+                     this.fullscreenEnterIcon.style.display = isFullscreen ? 'none' : 'block';
+                     this.fullscreenExitIcon.style.display = isFullscreen ? 'block' : 'none';
+                 }
+            }
+
+            updatePageNumber() {
+                if (this.totalPages === 0) {
+                     this.pageNumber.textContent = "- / -";
+                     this.pageSlider.value = 1;
+                     this.pageSlider.max = 1;
+                     return;
                 }
 
-                prevPage() {
-                    if (this.currentPageIndex > 0) {
-                        this.goToPage(this.currentPageIndex - 1);
-                    }
-                    this.showUI();
+                let displayedPage = this.currentPageIndex + 1;
+                let displayedTotal = this.totalPages;
+
+                 // Adjust displayed number in double page mode if desired (e.g., show "2-3 / 30")
+                 // Simple version: just show the index of the first visible page
+                this.pageNumber.textContent = `${displayedPage} / ${displayedTotal}`;
+                this.pageSlider.value = this.currentPageIndex + 1; // Slider uses 1-based index
+                this.pageSlider.max = this.totalPages;
+
+                 // Disable/Enable prev/next buttons based on index
+                 this.prevButton.disabled = this.currentPageIndex === 0;
+                 this.nextButton.disabled = this.currentPageIndex >= this.totalPages - 1;
+                 this.prevZone.style.pointerEvents = this.currentPageIndex === 0 ? 'none' : 'auto';
+                 this.nextZone.style.pointerEvents = this.currentPageIndex >= this.totalPages - 1 ? 'none' : 'auto';
+
+            }
+
+            prevPage() {
+                if (this.currentPageIndex > 0) {
+                    this.goToPage(this.currentPageIndex - 1);
+                }
+                 this.showUI(); // Show UI on navigation
+            }
+
+            nextPage() {
+                 // In double page mode, advance by 2 if not showing the last single page
+                 // let increment = (this.isDoublePage && this.currentPageIndex < this.totalPages - 2) ? 2 : 1;
+                 // Simplified: always advance by 1 page index unit
+                 let increment = 1;
+
+                if (this.currentPageIndex < this.totalPages - increment) {
+                    this.goToPage(this.currentPageIndex + increment);
+                }
+                 this.showUI(); // Show UI on navigation
+            }
+
+            goToPage(pageIndex) {
+                // Clamp index to valid range
+                const newIndex = Math.max(0, Math.min(pageIndex, this.totalPages - 1));
+
+                if (newIndex === this.currentPageIndex && this.currentPage.src) {
+                     console.log("Already on page", newIndex);
+                     return; // Already on this page (and loaded)
                 }
 
-                nextPage() {
-                    if (this.currentPageIndex < this.totalPages - 1) {
-                        this.goToPage(this.currentPageIndex + 1);
-                    }
-                    this.showUI();
-                }
+                this.currentPageIndex = newIndex;
+                this.resetZoom(); // Reset zoom when changing pages
+                this.loadPage(this.currentPageIndex); // Load the new page(s)
+                this.updatePageNumber(); // Update slider and text
+                this.saveBookmark(); // Save the new page index
+                 this.showUI(); // Ensure UI is visible after navigation
+            }
 
-                goToPage(pageIndex) {
-                    if (pageIndex >= 0 && pageIndex < this.totalPages) {
-                        this.currentPageIndex = pageIndex;
-                        // Reset zoom before loading new page
-                        this.resetZoom();
-                        this.loadPage(pageIndex);
-                        this.updatePageNumber();
-                        this.saveBookmark();
-                    }
-                }
+            onSliderInput() {
+                 // Show preview or update page number display while dragging (optional)
+                 this.pageNumber.textContent = `${this.pageSlider.value} / ${this.totalPages}`;
+                 this.showUI(false); // Keep UI visible while interacting with slider
+                 this.clearUiHideTimeout();
+            }
+            onSliderChange() {
+                 // Go to the selected page when user releases the slider
+                 this.goToPage(parseInt(this.pageSlider.value) - 1);
+                 this.scheduleUiHide(); // Schedule hide after interaction ends
+            }
 
-    // ブックマークをメモリ内に保持する静的オブジェクト
-    static bookmarks = {};
+            retryLoad() {
+                this.errorMessage.style.display = 'none';
+                // Option 1: Try reloading the current page
+                this.loadPage(this.currentPageIndex);
+                // Option 2: Try reloading all manga data (if structure might be issue)
+                // this.loadMangaData();
+            }
+
 
             saveBookmark() {
-                // 実際のアプリでは、サーバーにブックマークを送信します
-                // デモでは、メモリ内に保存します
+                // Saves bookmark to the static in-memory object.
+                // Replace with localStorage or server call for persistence.
+                if (!this.mangaData || !this.allPages.length) return; // Don't save if data not loaded
+
                 try {
                     const currentEpisode = this.mangaData.episodes[this.mangaData.currentEpisodeIndex];
+                    if (!currentEpisode) return; // Should not happen if data is loaded correctly
+
                     const key = `${this.mangaData.id}_${currentEpisode.id}`;
                     MangaViewer.bookmarks[key] = this.currentPageIndex;
-                    console.log(`Bookmark saved: ${key} = ${this.currentPageIndex}`);
+                    // console.log(`Bookmark saved (in memory): ${key} = ${this.currentPageIndex}`);
                 } catch (error) {
                     console.error('Error saving bookmark:', error);
                 }
             }
 
             loadBookmark() {
-                // 実際のアプリでは、サーバーからブックマークを取得します
-                // デモでは、メモリから読み込みます
+                // Loads bookmark from the static in-memory object.
+                if (!this.mangaData) return;
+
                 try {
                     const currentEpisode = this.mangaData.episodes[this.mangaData.currentEpisodeIndex];
+                     if (!currentEpisode) return;
+
                     const key = `${this.mangaData.id}_${currentEpisode.id}`;
-                    const pageIndex = MangaViewer.bookmarks[key];
-                    if (pageIndex !== undefined) {
-                        if (pageIndex >= 0 && pageIndex < this.totalPages) {
-                            console.log(`Bookmark loaded: ${key} = ${pageIndex}`);
-                            this.goToPage(pageIndex);
-                        }
+                    const savedIndex = MangaViewer.bookmarks[key];
+
+                    if (savedIndex !== undefined && savedIndex >= 0 && savedIndex < this.totalPages) {
+                        console.log(`Bookmark loaded (in memory): ${key} = ${savedIndex}`);
+                        // Set the index, goToPage will handle loading if needed
+                        this.currentPageIndex = savedIndex;
+                    } else {
+                        // No valid bookmark, start from page 0
+                        this.currentPageIndex = 0;
                     }
                 } catch (error) {
                     console.error('Error loading bookmark:', error);
+                     this.currentPageIndex = 0; // Default to first page on error
                 }
             }
 
+
             loadPage(pageIndex) {
-                // Reset zoom first
+                if (this.isLoading) return; // Prevent loading if already in progress
+                this.isLoading = true;
                 this.resetZoom();
-
-                // Show loading spinner
                 this.loadingSpinner.style.display = 'block';
+                this.errorMessage.style.display = 'none';
 
-                // 全ページ配列から現在のページデータを取得
-                const pageData = this.mangaData.allPages[pageIndex];
-                if (!pageData) {
-                    this.showError('ページデータが見つかりません。');
+                // Ensure pageIndex is valid
+                if (pageIndex < 0 || pageIndex >= this.totalPages) {
+                    this.showError(`無効なページインデックス: ${pageIndex}`);
+                    this.isLoading = false;
+                    this.loadingSpinner.style.display = 'none';
                     return;
                 }
 
-                // Preload current page
-                const currentPageImg = new Image();
-                currentPageImg.onload = () => {
-                    this.currentPage.src = currentPageImg.src;
+                const pageData = this.allPages[pageIndex];
+                if (!pageData || !pageData.image_url) {
+                    this.showError(`ページ ${pageIndex + 1} のデータが見つかりません。`);
+                    this.isLoading = false;
                     this.loadingSpinner.style.display = 'none';
-
-                    // After loading current page, update display
-                    this.updatePageDisplay();
-
-                    // Preload next/previous pages
-                    this.preloadAdjacentPages(pageIndex);
-                };
-                currentPageImg.onerror = () => {
-                    this.showError('画像の読み込みに失敗しました。');
-                };
-                currentPageImg.src = pageData.image_url;
-
-                // If double page mode and not the last page, load second page
-                if (this.isDoublePage && pageIndex < this.totalPages - 1) {
-                    const nextPageData = this.mangaData.allPages[pageIndex + 1];
-                    if (nextPageData) {
-                        const secondPageImg = new Image();
-                        secondPageImg.onload = () => {
-                            this.secondPage.src = secondPageImg.src;
-                        };
-                        secondPageImg.onerror = () => {
-                            console.error('Error loading second page');
-                        };
-                        secondPageImg.src = nextPageData.image_url;
-                    }
+                    return;
                 }
+
+                // Function to load a single image
+                const loadImage = (imgElement, src) => {
+                    return new Promise((resolve, reject) => {
+                        if (!imgElement) {
+                            return reject(new Error("Image element is missing."));
+                        }
+                        const img = new Image();
+                        img.onload = () => {
+                            imgElement.src = src;
+                            imgElement.style.backgroundColor = 'transparent'; // Remove placeholder bg
+                            resolve();
+                        };
+                        img.onerror = (err) => {
+                            console.error(`Error loading image: ${src}`, err);
+                             imgElement.style.backgroundColor = 'red'; // Indicate load error visually
+                            reject(new Error(`画像 (${src.split('/').pop()}) の読み込み失敗`));
+                        };
+                        imgElement.src = ""; // Clear previous image
+                        imgElement.style.backgroundColor = '#333'; // Placeholder bg
+                        img.src = src;
+                    });
+                };
+
+                const loadPromises = [];
+
+                // Load the primary page (currentPage)
+                loadPromises.push(loadImage(this.currentPage, pageData.image_url));
+
+                // Determine if the second page needs to be loaded
+                const isDoubleDisplay = this.isDoublePage && pageIndex < this.totalPages - 1;
+                if (isDoubleDisplay) {
+                    const nextPageData = this.allPages[pageIndex + 1];
+                    if (nextPageData && nextPageData.image_url) {
+                        loadPromises.push(loadImage(this.secondPage, nextPageData.image_url));
+                    } else {
+                        // Next page data missing, ensure second page is hidden
+                        this.secondPage.classList.add('hidden');
+                        this.secondPage.src = ""; // Clear src
+                        console.warn(`Double page mode: Next page data missing for index ${pageIndex + 1}`);
+                    }
+                } else {
+                    // Not double display, ensure second page is hidden
+                    this.secondPage.classList.add('hidden');
+                    this.secondPage.src = ""; // Clear src
+                }
+
+                // Wait for all required images to load
+                Promise.all(loadPromises)
+                    .then(() => {
+                        this.updatePageDisplay(); // Update layout and styles
+                        this.preloadAdjacentPages(pageIndex); // Preload next/prev
+                    })
+                    .catch((error) => {
+                        this.showError(error.message);
+                    })
+                    .finally(() => {
+                        this.loadingSpinner.style.display = 'none';
+                        this.isLoading = false;
+                    });
             }
 
-            updatePageDisplay() {
-                // Update based on page mode (single or double)
-                if (this.isDoublePage && this.currentPageIndex < this.totalPages - 1) {
-                    // Show both pages in double page mode
+
+             updatePageDisplay() {
+                // Reset classes first
+                this.currentPage.classList.remove('double-page-mode', 'rtl', 'ltr');
+                this.secondPage.classList.remove('double-page-mode', 'rtl', 'ltr');
+                this.secondPage.classList.add('hidden'); // Default to hidden
+
+                const isDoubleDisplayPossible = this.isDoublePage && this.currentPageIndex < this.totalPages - 1;
+                // Check if the *next* page actually exists in the data for double display
+                const nextPageIndex = this.currentPageIndex + 1;
+                const nextPageExists = nextPageIndex < this.totalPages && this.allPages[nextPageIndex];
+
+                if (isDoubleDisplayPossible && nextPageExists && this.secondPage.src) { // Ensure second page image is loaded
                     this.currentPage.classList.add('double-page-mode');
                     this.secondPage.classList.add('double-page-mode');
                     this.secondPage.classList.remove('hidden');
 
-                    // Set reading direction
+                    // Apply reading direction classes based on this.readingDirection
+                    // RTL: Right page (current) is order 1, Left page (second) is order 2
+                    // LTR: Left page (current) is order 2, Right page (second) is order 1
                     if (this.readingDirection === 'rtl') {
-                        this.currentPage.classList.add('rtl');
-                        this.currentPage.classList.remove('ltr');
-                        this.secondPage.classList.add('ltr');
-                        this.secondPage.classList.remove('rtl');
-                    } else {
-                        this.currentPage.classList.add('ltr');
-                        this.currentPage.classList.remove('rtl');
-                        this.secondPage.classList.add('rtl');
-                        this.secondPage.classList.remove('ltr');
+                        this.currentPage.classList.add('rtl'); // Order 1
+                        this.secondPage.classList.add('ltr'); // Order 2
+                    } else { // LTR
+                        this.currentPage.classList.add('ltr'); // Order 2
+                        this.secondPage.classList.add('rtl'); // Order 1
                     }
                 } else {
-                    // Show only current page in single page mode
-                    this.currentPage.classList.remove('double-page-mode');
+                    // Single page display (or last page in double mode)
+                    this.currentPage.classList.remove('double-page-mode', 'rtl', 'ltr'); // Ensure single page has no extra classes
                     this.secondPage.classList.add('hidden');
+                    // Optional: Clear src attribute if hidden for a long time
+                    // this.secondPage.src = "";
                 }
 
-                // Apply fit mode
+                // Re-apply fit mode after layout changes
                 this.applyFitMode();
             }
 
+
             preloadAdjacentPages(currentIndex) {
-                // 前後のページをプリロード
-                // 次のページをプリロード（最終ページでない場合）
-                if (currentIndex < this.totalPages - 1) {
-                    const nextPageData = this.mangaData.allPages[currentIndex + 1];
-                    if (nextPageData) {
-                        const nextImg = new Image();
-                        nextImg.src = nextPageData.image_url;
+                // Preload next pages
+                const preloadNextCount = this.isDoublePage ? 2 : 1; // Preload more in double mode
+                for (let i = 1; i <= preloadNextCount; i++) {
+                    const nextIndex = currentIndex + i + (this.isDoublePage ? 1 : 0); // Offset for already loaded second page
+                    if (nextIndex < this.totalPages) {
+                        const nextPageData = this.allPages[nextIndex];
+                        if (nextPageData && nextPageData.image_url) {
+                            const nextImg = new Image();
+                            nextImg.src = nextPageData.image_url;
+                             // console.log("Preloading next:", nextIndex + 1);
+                        }
                     }
                 }
 
-                // 前のページをプリロード（最初のページでない場合）
-                if (currentIndex > 0) {
-                    const prevPageData = this.mangaData.allPages[currentIndex - 1];
-                    if (prevPageData) {
+                // Preload previous page(s)
+                const prevIndex = currentIndex - 1;
+                if (prevIndex >= 0) {
+                    const prevPageData = this.allPages[prevIndex];
+                    if (prevPageData && prevPageData.image_url) {
                         const prevImg = new Image();
                         prevImg.src = prevPageData.image_url;
+                        // console.log("Preloading prev:", prevIndex + 1);
                     }
                 }
             }
 
             showError(message) {
-                this.loadingSpinner.style.display = 'none';
+                this.loadingSpinner.style.display = 'none'; // Ensure spinner is hidden
                 this.errorText.textContent = message;
                 this.errorMessage.style.display = 'block';
+                 this.isLoading = false; // Reset loading state on error
             }
 
-            // Touch handling for swipe navigation
+
+           // --- Touch Event Handlers ---
+
             handleTouchStart(e) {
+                this.showUI(); // Show UI on any interaction
+                this.clearUiHideTimeout(); // Don't hide UI while interacting
+
                 if (e.touches.length === 1) {
+                     // Single finger touch
+                    this.isZooming = false; // Not zooming with one finger
+                    this.isPanning = this.scale > 1; // Panning is possible only if zoomed
                     this.touchStartX = e.touches[0].clientX;
                     this.touchStartY = e.touches[0].clientY;
+                    if (this.isPanning) {
+                        this.panStartX = this.translateX; // Store initial translation for panning calc
+                        this.panStartY = this.translateY;
+                    }
+                } else if (e.touches.length === 2) {
+                     // Two fingers touch - start pinch zoom
+                    this.isZooming = true;
+                    this.isPanning = false; // Zoom takes precedence over pan
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    this.initialDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+                     // Store initial scale and translation for relative zoom/pan
+                    this.initialScale = this.scale;
+                    this.panStartX = this.translateX;
+                    this.panStartY = this.translateY;
+                     // Calculate pinch center relative to the element
+                    const rect = this.zoomContainer.getBoundingClientRect();
+                    this.pinchCenterX = ((touch1.clientX + touch2.clientX) / 2) - rect.left;
+                    this.pinchCenterY = ((touch1.clientY + touch2.clientY) / 2) - rect.top;
+
                 }
             }
 
             handleTouchMove(e) {
-                // Don't handle swipes while zooming
-                if (this.isZooming || this.scale > 1) return;
+                if (this.isZooming && e.touches.length === 2) {
+                    // Pinch Zoom move
+                    e.preventDefault(); // Prevent page scroll/other defaults during zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const currentDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 
-                if (e.touches.length === 1) {
-                    const touchX = e.touches[0].clientX;
-                    const touchY = e.touches[0].clientY;
+                    if (this.initialDistance > 0) {
+                        // Calculate scale delta
+                        let newScale = this.initialScale * (currentDistance / this.initialDistance);
+                        newScale = Math.max(1, Math.min(newScale, 3)); // Clamp scale between 1x and 3x
 
-                    // Calculate distance moved
-                    const deltaX = touchX - this.touchStartX;
-                    const deltaY = touchY - this.touchStartY;
+                         // Calculate translation offset needed to zoom towards pinch center
+                         // Transformation origin is center, so we need to adjust translate
+                        const scaleDelta = newScale / this.scale; // Ratio of new scale to current scale before update
 
-                    // Only handle horizontal swipes (prevent conflicts with vertical scrolling)
-                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-                        e.preventDefault(); // Prevent default only for significant horizontal swipes
+                        // Calculate the translation adjustment needed to keep the pinch center stationary
+                        // This formula needs refinement based on transform-origin: center
+                        // Simplified approach: adjust based on initial pan state and scale change
+                         // This part is complex and might need library like Hammer.js for robustness
+                         // Simple scaling for now:
+                         this.scale = newScale;
+
+                         // --- Attempting pinch center zoom ---
+                         // Position of pinch center in scaled coordinates (before this move)
+                        // let initialPinchX = (this.pinchCenterX - this.translateX) / this.scale;
+                        // let initialPinchY = (this.pinchCenterY - this.translateY) / this.scale;
+                        // New translation to keep that point at the same screen position
+                        // this.translateX = this.pinchCenterX - initialPinchX * newScale;
+                        // this.translateY = this.pinchCenterY - initialPinchY * newScale;
+                        // --- End pinch center attempt ---
+
+                        this.applyPanBoundaries(); // Ensure translation stays within bounds
+                        this.updateZoom();
                     }
+
+                } else if (this.isPanning && e.touches.length === 1) {
+                    // Panning move (only if zoomed in)
+                    e.preventDefault(); // Prevent page scroll during pan
+                    const currentX = e.touches[0].clientX;
+                    const currentY = e.touches[0].clientY;
+                    const deltaX = currentX - this.touchStartX; // Difference from touch start
+                    const deltaY = currentY - this.touchStartY;
+
+                    // New translation is initial translation + delta
+                    this.translateX = this.panStartX + deltaX;
+                    this.translateY = this.panStartY + deltaY;
+
+                    this.applyPanBoundaries(); // Keep pan within limits
+                    this.updateZoom();
                 }
+                 // If not zooming or panning, do nothing on move (allows native scroll if applicable elsewhere)
             }
 
             handleTouchEnd(e) {
-                // Don't handle swipes while zooming
-                if (this.isZooming || this.scale > 1) return;
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - this.lastTapTime;
+                let isDoubleTap = false;
 
-                if (e.changedTouches.length === 1) {
+                // --- Double Tap Check ---
+                // Must be a single finger release, quick succession
+                if (e.changedTouches.length === 1 && tapLength < 300 && tapLength > 0) {
+                    isDoubleTap = true;
+                    // Find tap location relative to the container
+                    const rect = this.viewerContainer.getBoundingClientRect(); // Use viewer container for coordinates
+                    const tapX = e.changedTouches[0].clientX - rect.left;
+                    const tapY = e.changedTouches[0].clientY - rect.top;
+
+                    if (this.scale === 1) {
+                        // Zoom In towards tap point
+                        this.scale = 2; // Target zoom level
+
+                        // Calculate translation to center the tapped point (approximately)
+                        // Adjust based on the difference between container center and tap point
+                        this.translateX = (this.viewerContainer.clientWidth / 2 - tapX) * (this.scale - 1) / this.scale;
+                        this.translateY = (this.viewerContainer.clientHeight / 2 - tapY) * (this.scale - 1) / this.scale;
+
+                    } else {
+                        // Zoom Out (reset)
+                        this.resetZoom();
+                    }
+                    this.applyPanBoundaries(); // Ensure boundaries after zoom
+                    this.updateZoom();
+                }
+                this.lastTapTime = currentTime; // Update tap time for next potential double tap
+
+                // --- Swipe Check ---
+                // Only if NOT a double tap, NOT currently pinch-zooming, and scale is 1 (or close to 1)
+                 if (!isDoubleTap && !this.isZooming && this.scale <= 1.05 && e.changedTouches.length === 1) {
                     const touchEndX = e.changedTouches[0].clientX;
                     const touchEndY = e.changedTouches[0].clientY;
-
-                    // Calculate distance moved
                     const deltaX = touchEndX - this.touchStartX;
                     const deltaY = touchEndY - this.touchStartY;
 
-                    // Detect horizontal swipe
-                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-                        // 読書方向に合わせてスワイプの挙動を修正
-                        // RTL（右から左）の場合、右にスワイプすると次のページ
+                    // Thresholds for swipe detection
+                    const swipeThreshold = 50; // Min horizontal distance
+                    const verticalThreshold = 50; // Max vertical distance allowed for horizontal swipe
+
+                    if (Math.abs(deltaX) > swipeThreshold && Math.abs(deltaY) < verticalThreshold) {
+                        // Horizontal swipe detected
                         if (this.readingDirection === 'rtl') {
-                            if (deltaX > 0) {
-                                this.nextPage();
-                            } else {
-                                this.prevPage();
-                            }
-                        } else {
-                            // LTR（左から右）の場合、左にスワイプすると次のページ
-                            if (deltaX < 0) {
-                                this.nextPage();
-                            } else {
-                                this.prevPage();
-                            }
+                            if (deltaX > 0) this.prevPage(); // Swipe Right -> Previous Page (RTL)
+                            else this.nextPage();          // Swipe Left  -> Next Page (RTL)
+                        } else { // LTR
+                            if (deltaX < 0) this.nextPage(); // Swipe Left  -> Next Page (LTR)
+                            else this.prevPage();          // Swipe Right -> Previous Page (LTR)
                         }
                     }
+                    // Could add vertical swipe detection here if needed
                 }
-            }
 
-            // Zoom handling
-            handleZoomStart(e) {
-                if (e.touches.length === 2) {
-                    // Calculate initial distance between two touches
-                    const touch1 = e.touches[0];
-                    const touch2 = e.touches[1];
-                    this.initialDistance = Math.hypot(
-                        touch2.clientX - touch1.clientX,
-                        touch2.clientY - touch1.clientY
-                    );
-                    this.isZooming = true;
-                }
-            }
 
-            handleZoomMove(e) {
-                if (this.isZooming && e.touches.length === 2) {
-                    // Calculate current distance between touches
-                    const touch1 = e.touches[0];
-                    const touch2 = e.touches[1];
-                    const currentDistance = Math.hypot(
-                        touch2.clientX - touch1.clientX,
-                        touch2.clientY - touch1.clientY
-                    );
-
-                    // Calculate new scale based on change in distance
-                    const newScale = (this.scale * currentDistance) / this.initialDistance;
-
-                    // Limit scale between 1 and 3
-                    if (newScale >= 1 && newScale <= 3) {
-                        this.scale = newScale;
-                        this.updateZoom();
-                    }
-                } else if (this.scale > 1 && e.touches.length === 1) {
-                    // Pan the image when zoomed in
-                    const touchX = e.touches[0].clientX;
-                    const touchY = e.touches[0].clientY;
-
-                    // Calculate distance moved
-                    const deltaX = touchX - this.touchStartX;
-                    const deltaY = touchY - this.touchStartY;
-
-                    // Update touch start position
-                    this.touchStartX = touchX;
-                    this.touchStartY = touchY;
-
-                    // Update translation (with boundaries to prevent moving too far)
-                    const maxTranslateX = (this.scale - 1) * this.zoomContainer.clientWidth / 2;
-                    const maxTranslateY = (this.scale - 1) * this.zoomContainer.clientHeight / 2;
-
-                    this.translateX += deltaX;
-                    this.translateY += deltaY;
-
-                    // Apply boundaries
-                    this.translateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, this.translateX));
-                    this.translateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, this.translateY));
-
-                    this.updateZoom();
-                }
-            }
-
-            handleZoomEnd(e) {
-                if (this.isZooming) {
+                // --- Reset Flags ---
+                if (this.isZooming && e.touches.length < 2) {
                     this.isZooming = false;
-                    this.initialDistance = 0;
-
-                    // If scale is close to 1, reset zoom
-                    if (this.scale < 1.1) {
-                        this.resetZoom();
-                    }
+                     // Snap back if scale is very close to 1 after pinch
+                     if (this.scale < 1.05) {
+                         this.resetZoom();
+                         this.updateZoom(); // Apply reset transform
+                     }
                 }
-            }
-
-            handleDoubleTap(e) {
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - this.lastTapTime;
-
-                if (tapLength < 300 && tapLength > 0) {
-                    // Double tap detected
-                    e.preventDefault();
-
-                    if (this.scale === 1) {
-                        // Zoom in to 2x at the tap position
-                        this.scale = 2;
-
-                        // Calculate tap position relative to container
-                        const rect = this.zoomContainer.getBoundingClientRect();
-                        const tapX = e.changedTouches[0].clientX - rect.left;
-                        const tapY = e.changedTouches[0].clientY - rect.top;
-
-                        // Adjust translation to zoom into tap position
-                        this.translateX = (this.zoomContainer.clientWidth / 2 - tapX) * (this.scale - 1) / this.scale;
-                        this.translateY = (this.zoomContainer.clientHeight / 2 - tapY) * (this.scale - 1) / this.scale;
-                    } else {
-                        // Zoom out
-                        this.resetZoom();
-                    }
-
-                    this.updateZoom();
+                 if (this.isPanning && e.touches.length === 0) {
+                    this.isPanning = false;
                 }
 
-                this.lastTapTime = currentTime;
+                // Schedule UI hide after interaction ends
+                this.scheduleUiHide();
             }
+
+            handleTouchCancel(e) {
+                 // Reset interaction states if touch is cancelled
+                 console.log("Touch cancelled");
+                 this.isZooming = false;
+                 this.isPanning = false;
+                 this.initialDistance = 0;
+                 // Schedule UI hide
+                 this.scheduleUiHide();
+            }
+
 
             updateZoom() {
-                this.zoomContainer.style.transform = `scale(${this.scale}) translate(${this.translateX}px, ${this.translateY}px)`;
+                 // Apply transform to the zoom container
+                this.zoomContainer.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
             }
 
             resetZoom() {
-                this.scale = 1;
-                this.translateX = 0;
-                this.translateY = 0;
-                this.zoomContainer.style.transform = 'scale(1) translate(0px, 0px)';
+                 if (this.scale !== 1 || this.translateX !== 0 || this.translateY !== 0) {
+                    this.scale = 1;
+                    this.translateX = 0;
+                    this.translateY = 0;
+                    // Use transition for smooth reset
+                    this.zoomContainer.style.transition = 'transform 0.3s ease';
+                    this.updateZoom();
+                     // Remove transition after it finishes to avoid affecting drag performance
+                     // setTimeout(() => {
+                     //     if (this.zoomContainer) this.zoomContainer.style.transition = 'none';
+                     // }, 300);
+                 }
+            }
+
+            applyPanBoundaries() {
+                // Calculate boundaries based on current scale and container size
+                const containerWidth = this.viewerContainer.clientWidth;
+                const containerHeight = this.viewerContainer.clientHeight;
+
+                // Calculate the dimensions of the scaled content (zoomContainer holds pageContainer)
+                // Assuming pageContainer perfectly fits zoomContainer at scale 1
+                const contentWidth = containerWidth * this.scale;
+                const contentHeight = containerHeight * this.scale;
+
+                // Calculate the maximum allowed translation offset from the center
+                // This ensures that the scaled content edges do not go beyond the container edges
+                const maxTranslateX = Math.max(0, (contentWidth - containerWidth) / 2);
+                const maxTranslateY = Math.max(0, (contentHeight - containerHeight) / 2);
+
+                // Clamp the current translation values
+                this.translateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, this.translateX));
+                this.translateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, this.translateY));
+            }
+
+
+            handleKeyDown(e) {
+                // Basic keyboard navigation
+                switch (e.key) {
+                    case 'ArrowLeft':
+                        if (this.readingDirection === 'rtl') this.nextPage();
+                        else this.prevPage();
+                        break;
+                    case 'ArrowRight':
+                         if (this.readingDirection === 'rtl') this.prevPage();
+                        else this.nextPage();
+                        break;
+                    case ' ': // Space bar often used for next page
+                        this.nextPage();
+                        break;
+                    case 'Escape':
+                        if (this.isSettingsVisible) this.toggleSettings();
+                        else if (this.isUIVisible) this.hideUI();
+                        break;
+                }
             }
 
             handleResize() {
-                // Reset zoom on resize
+                // Reset zoom and re-apply fit mode on window resize
                 this.resetZoom();
-
-                // Re-apply fit mode
                 this.applyFitMode();
+                // Update page display in case aspect ratio changes affect double page layout
+                this.updatePageDisplay();
             }
         }
 
         // Initialize the viewer when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             // Create and initialize the manga viewer
-            const viewer = new MangaViewer();
+            // Ensure the script runs only once
+             if (!window.mangaViewerInstance) {
+                window.mangaViewerInstance = new MangaViewer();
+            }
         });
     </script>
 </body>
