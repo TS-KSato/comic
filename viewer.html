@@ -560,7 +560,7 @@
 
             init() {
                 this.setupEventListeners();
-                // Removed settings loading
+                this.resetZoom(); // 初期化時にも確実にリセット
                 this.loadMangaData();
                 this.scheduleUiHide();
             }
@@ -946,6 +946,12 @@
                 if (this.isLoading) return;
                 this.isLoading = true;
                 this.resetZoom();
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                void this.zoomContainer.offsetWidth;
+                this.updateZoom();
+
                 this.loadingSpinner.style.display = 'block';
                 this.errorMessage.style.display = 'none';
 
@@ -1180,8 +1186,10 @@
 
                 if (this.isZooming && e.touches.length < 2) {
                     this.isZooming = false;
-                    if (this.scale < 1.05) {
-                        this.resetZoom();
+                    if (this.scale < 1.1) {
+                        this.scale = 1;
+                        this.translateX = 0;
+                        this.translateY = 0;
                         this.updateZoom();
                     }
                 }
