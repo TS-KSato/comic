@@ -26,11 +26,11 @@
         /* Optional: Keep dark theme styles if system preference detection is desired, */
         /* but remove the manual switching buttons/logic */
         @media (prefers-color-scheme: dark) {
-           :root {
+            :root {
                 --background-color: #121212;
                 --text-color: #f1f1f1;
                 --overlay-background: rgba(0, 0, 0, 0.8);
-           }
+            }
         }
 
 
@@ -67,8 +67,9 @@
             align-items: center;
             cursor: grab;
         }
+
         #viewer-container:active {
-             cursor: grabbing;
+            cursor: grabbing;
         }
 
         #zoom-container {
@@ -79,7 +80,11 @@
             justify-content: center;
             align-items: center;
             transform-origin: center;
-            transition: transform 0.3s ease;
+            /* 動的な変更時のみトランジションを適用する（JSで制御） */
+            transition: none;
+            /* ハードウェアアクセラレーションを有効化 */
+            transform: translate3d(0, 0, 0);
+            will-change: transform;
         }
 
         #manga-page-container {
@@ -96,12 +101,17 @@
             display: block;
             max-width: 100%;
             max-height: 100%;
-            object-fit: contain; /* Default fit mode */
+            object-fit: contain;
+            /* Default fit mode */
             transform-origin: center;
             transition: opacity 0.3s ease;
             pointer-events: none;
             flex-shrink: 0;
-            background-color: #333; /* Placeholder */
+            background-color: #333;
+            /* Placeholder */
+            /* ハードウェアアクセラレーションを有効化 */
+            transform: translateZ(0);
+            will-change: transform, opacity;
         }
 
         /* Navigation zones */
@@ -113,9 +123,21 @@
             z-index: 10;
         }
 
-        #prev-zone { left: 0; cursor: pointer; }
-        #next-zone { right: 0; cursor: pointer; }
-        #center-zone { left: 30%; width: 40%; cursor: pointer; }
+        #prev-zone {
+            left: 0;
+            cursor: pointer;
+        }
+
+        #next-zone {
+            right: 0;
+            cursor: pointer;
+        }
+
+        #center-zone {
+            left: 30%;
+            width: 40%;
+            cursor: pointer;
+        }
 
         /* UI Overlays */
         .ui-overlay {
@@ -131,8 +153,12 @@
             justify-content: space-between;
             align-items: center;
             pointer-events: none;
+            /* ハードウェアアクセラレーションを有効化 */
+            transform: translate3d(0, 0, 0);
+            will-change: transform, opacity;
         }
-        .ui-overlay > * {
+
+        .ui-overlay>* {
             pointer-events: auto;
         }
 
@@ -154,7 +180,9 @@
 
         #viewer-container.ui-hidden .ui-overlay {
             opacity: 0;
-            transform: translateY(-100%) /* or translateY(100%) for bottom */;
+            transform: translateY(-100%)
+                /* or translateY(100%) for bottom */
+            ;
             pointer-events: none;
         }
 
@@ -178,10 +206,12 @@
         .ui-button:active {
             background-color: var(--button-hover);
         }
+
         .ui-button:disabled {
-             opacity: 0.5;
-             cursor: default;
-             background-color: var(--button-background); /* Prevent hover effect */
+            opacity: 0.5;
+            cursor: default;
+            background-color: var(--button-background);
+            /* Prevent hover effect */
         }
 
 
@@ -245,8 +275,13 @@
         }
 
         @keyframes spin {
-             from { transform: translate(-50%, -50%) rotate(0deg); }
-             to { transform: translate(-50%, -50%) rotate(360deg); }
+            from {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+
+            to {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
         }
 
         /* Error message */
@@ -277,8 +312,66 @@
             cursor: pointer;
             transition: background-color 0.2s ease, color 0.2s ease;
         }
+
         #retry-button:hover {
             background-color: #eee;
+        }
+
+        #episode-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--overlay-background);
+            z-index: 50;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #episode-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 80%;
+            max-width: 500px;
+            background-color: var(--background-color);
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        #episode-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .episode-item {
+            padding: 12px;
+            background-color: rgba(128, 128, 128, 0.1);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .episode-item:hover {
+            background-color: rgba(128, 128, 128, 0.2);
+        }
+
+        .episode-item.current {
+            border-left: 3px solid var(--primary-color);
+            font-weight: bold;
         }
     </style>
 </head>
@@ -326,10 +419,33 @@
 
             <button class="ui-button" id="fullscreen-button" aria-label="Toggle Fullscreen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path id="fullscreen-enter-icon" d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z"></path>
-                    <path id="fullscreen-exit-icon" d="M5,16h3v3h2v-5H5V16z M8,5H5v5h2V7h3V5z M14,19h2v-3h3v-2h-5V19z M16,8h3V5h-2v3h-3V8z" style="display: none;"></path>
+                    <path id="fullscreen-enter-icon"
+                        d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z"></path>
+                    <path id="fullscreen-exit-icon"
+                        d="M5,16h3v3h2v-5H5V16z M8,5H5v5h2V7h3V5z M14,19h2v-3h3v-2h-5V19z M16,8h3V5h-2v3h-3V8z"
+                        style="display: none;"></path>
                 </svg>
             </button>
+
+            <div id="episode-navigation">
+                <button class="ui-button" id="episode-btn" aria-label="エピソード選択">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M3,13h2v-2H3V13z M3,17h2v-2H3V17z M3,9h2V7H3V9z M7,13h14v-2H7V13z M7,17h14v-2H7V17z M7,7v2h14V7H7z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div id="episode-overlay" class="modal-overlay">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>エピソード選択</h2>
+                        <button id="close-episode-btn" class="ui-button">×</button>
+                    </div>
+                    <div id="episode-list"></div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Settings panel Removed -->
@@ -417,17 +533,17 @@
                         { page_number: 2, image_url: 'i_002.jpg', type: 'contents' }
                     ],
                     episodes: [
-                        { id: 'episode1', title: '第1話', pages: [ { page_number: 3, image_url: 'i_003.jpg' }, { page_number: 4, image_url: 'i_004.jpg' }, { page_number: 5, image_url: 'i_005.jpg' }, { page_number: 6, image_url: 'i_006.jpg' }, { page_number: 7, image_url: 'i_007.jpg' }, { page_number: 8, image_url: 'i_008.jpg' }, { page_number: 9, image_url: 'i_009.jpg' }, { page_number: 10, image_url: 'i_010.jpg' }, { page_number: 11, image_url: 'i_011.jpg' }, { page_number: 12, image_url: 'i_012.jpg' }, { page_number: 13, image_url: 'i_013.jpg' }] },
-                        { id: 'episode2', title: '第2話', pages: [ { page_number: 14, image_url: 'i_014.jpg' }, { page_number: 15, image_url: 'i_015.jpg' }, { page_number: 16, image_url: 'i_016.jpg' }, { page_number: 17, image_url: 'i_017.jpg' }, { page_number: 18, image_url: 'i_018.jpg' }, { page_number: 19, image_url: 'i_019.jpg' }, { page_number: 20, image_url: 'i_020.jpg' }, { page_number: 21, image_url: 'i_021.jpg' }, { page_number: 22, image_url: 'i_022.jpg' }] },
-                        { id: 'episode3', title: '第3話', pages: [ { page_number: 23, image_url: 'i_023.jpg' }, { page_number: 24, image_url: 'i_024.jpg' }, { page_number: 25, image_url: 'i_025.jpg' }, { page_number: 26, image_url: 'i_026.jpg' }, { page_number: 27, image_url: 'i_027.jpg' }, { page_number: 28, image_url: 'i_028.jpg' }, { page_number: 29, image_url: 'i_029.jpg' }, { page_number: 30, image_url: 'i_030.jpg' }, { page_number: 31, image_url: 'i_031.jpg' }] },
-                        { id: 'episode4', title: '第4話', pages: [ { page_number: 32, image_url: 'i_032.jpg' }, { page_number: 33, image_url: 'i_033.jpg' }, { page_number: 34, image_url: 'i_034.jpg' }, { page_number: 35, image_url: 'i_035.jpg' }, { page_number: 36, image_url: 'i_036.jpg' }, { page_number: 37, image_url: 'i_037.jpg' }, { page_number: 38, image_url: 'i_038.jpg' }, { page_number: 39, image_url: 'i_039.jpg' }, { page_number: 40, image_url: 'i_040.jpg' }] },
-                        { id: 'episode5', title: '第5話', pages: [ { page_number: 41, image_url: 'i_041.jpg' }, { page_number: 42, image_url: 'i_042.jpg' }, { page_number: 43, image_url: 'i_043.jpg' }, { page_number: 44, image_url: 'i_044.jpg' }, { page_number: 45, image_url: 'i_045.jpg' }, { page_number: 46, image_url: 'i_046.jpg' }, { page_number: 47, image_url: 'i_047.jpg' }, { page_number: 48, image_url: 'i_048.jpg' }] }
+                        { id: 'episode1', title: '第1話', pages: [{ page_number: 3, image_url: 'i_003.jpg' }, { page_number: 4, image_url: 'i_004.jpg' }, { page_number: 5, image_url: 'i_005.jpg' }, { page_number: 6, image_url: 'i_006.jpg' }, { page_number: 7, image_url: 'i_007.jpg' }, { page_number: 8, image_url: 'i_008.jpg' }, { page_number: 9, image_url: 'i_009.jpg' }, { page_number: 10, image_url: 'i_010.jpg' }, { page_number: 11, image_url: 'i_011.jpg' }, { page_number: 12, image_url: 'i_012.jpg' }, { page_number: 13, image_url: 'i_013.jpg' }] },
+                        { id: 'episode2', title: '第2話', pages: [{ page_number: 14, image_url: 'i_014.jpg' }, { page_number: 15, image_url: 'i_015.jpg' }, { page_number: 16, image_url: 'i_016.jpg' }, { page_number: 17, image_url: 'i_017.jpg' }, { page_number: 18, image_url: 'i_018.jpg' }, { page_number: 19, image_url: 'i_019.jpg' }, { page_number: 20, image_url: 'i_020.jpg' }, { page_number: 21, image_url: 'i_021.jpg' }, { page_number: 22, image_url: 'i_022.jpg' }] },
+                        { id: 'episode3', title: '第3話', pages: [{ page_number: 23, image_url: 'i_023.jpg' }, { page_number: 24, image_url: 'i_024.jpg' }, { page_number: 25, image_url: 'i_025.jpg' }, { page_number: 26, image_url: 'i_026.jpg' }, { page_number: 27, image_url: 'i_027.jpg' }, { page_number: 28, image_url: 'i_028.jpg' }, { page_number: 29, image_url: 'i_029.jpg' }, { page_number: 30, image_url: 'i_030.jpg' }, { page_number: 31, image_url: 'i_031.jpg' }] },
+                        { id: 'episode4', title: '第4話', pages: [{ page_number: 32, image_url: 'i_032.jpg' }, { page_number: 33, image_url: 'i_033.jpg' }, { page_number: 34, image_url: 'i_034.jpg' }, { page_number: 35, image_url: 'i_035.jpg' }, { page_number: 36, image_url: 'i_036.jpg' }, { page_number: 37, image_url: 'i_037.jpg' }, { page_number: 38, image_url: 'i_038.jpg' }, { page_number: 39, image_url: 'i_039.jpg' }, { page_number: 40, image_url: 'i_040.jpg' }] },
+                        { id: 'episode5', title: '第5話', pages: [{ page_number: 41, image_url: 'i_041.jpg' }, { page_number: 42, image_url: 'i_042.jpg' }, { page_number: 43, image_url: 'i_043.jpg' }, { page_number: 44, image_url: 'i_044.jpg' }, { page_number: 45, image_url: 'i_045.jpg' }, { page_number: 46, image_url: 'i_046.jpg' }, { page_number: 47, image_url: 'i_047.jpg' }, { page_number: 48, image_url: 'i_048.jpg' }] }
                     ],
                     // Removed: currentEpisodeIndex (no longer needed for page loading)
                     reading_direction: 'rtl'
                 };
 
-                if (!this.viewerContainer || !this.currentPage ) {
+                if (!this.viewerContainer || !this.currentPage) {
                     console.error("初期化エラー: 必須のDOM要素が見つかりません。");
                     this.showError("ビューアの初期化に失敗しました。ページをリロードしてください。");
                     return;
@@ -462,9 +578,9 @@
                         try {
                             // Simulate potential API error
                             // if (Math.random() > 0.8) throw new Error("Simulated network error");
-                             console.log("Data fetched (simulated)");
-                             this.isLoading = false;
-                             resolve(this.mangaData);
+                            console.log("Data fetched (simulated)");
+                            this.isLoading = false;
+                            resolve(this.mangaData);
                         } catch (error) {
                             console.error("Error fetching manga data:", error);
                             this.isLoading = false;
@@ -481,6 +597,38 @@
                 try {
                     const data = await this.fetchMangaData();
 
+                    // 最初は表示に必要な最小限のデータだけを処理
+                    this.contentTitle.textContent = data.title || 'Manga Viewer';
+                    this.readingDirection = data.reading_direction || 'rtl';
+
+                    // 章・エピソードのメタデータだけを初期化
+                    this.episodeStructure = [];
+                    if (data.frontMatter && data.frontMatter.length > 0) {
+                        this.episodeStructure.push({
+                            id: 'frontmatter',
+                            title: '表紙・目次',
+                            startPage: 0,
+                            endPage: data.frontMatter.length - 1,
+                            totalPages: data.frontMatter.length
+                        });
+                    }
+
+                    let pageCount = data.frontMatter?.length || 0;
+                    if (data.episodes && data.episodes.length > 0) {
+                        data.episodes.forEach((episode, index) => {
+                            if (episode.pages && episode.pages.length > 0) {
+                                this.episodeStructure.push({
+                                    id: episode.id || `episode${index + 1}`,
+                                    title: episode.title || `第${index + 1}話`,
+                                    startPage: pageCount,
+                                    endPage: pageCount + episode.pages.length - 1,
+                                    totalPages: episode.pages.length
+                                });
+                                pageCount += episode.pages.length;
+                            }
+                        });
+                    }
+
                     // --- Process Data (Combine ALL pages) ---
                     let combinedPages = [...(data.frontMatter || [])];
                     if (data.episodes && data.episodes.length > 0) {
@@ -490,25 +638,20 @@
                             }
                         });
                     } else {
-                         throw new Error("有効なエピソードデータが見つかりません。");
+                        throw new Error("有効なエピソードデータが見つかりません。");
                     }
-                     this.allPages = combinedPages;
-                     this.totalPages = this.allPages.length;
+                    this.allPages = combinedPages;
+                    this.totalPages = this.allPages.length;
 
 
                     if (this.totalPages === 0) {
                         throw new Error("表示できるページがありません。");
                     }
 
-                    this.readingDirection = data.reading_direction || 'rtl';
-
                     // Update UI elements (Simplified Title)
-                    this.contentTitle.textContent = data.title || 'Manga Viewer'; // Show main title
                     this.pageSlider.max = this.totalPages;
                     this.pageSlider.min = 1;
                     this.pageSlider.value = this.currentPageIndex + 1;
-
-                    // Removed page mode / fit mode application
 
                     this.loadBookmark(); // Load bookmark before loading the page
 
@@ -526,16 +669,21 @@
 
 
             setupEventListeners() {
+                // イベント委任の活用
+                this.bottomOverlay.addEventListener('click', (e) => {
+                    const target = e.target.closest('.ui-button');
+                    if (!target) return;
+
+                    if (target.id === 'prev-button') this.prevPage();
+                    else if (target.id === 'next-button') this.nextPage();
+                    else if (target.id === 'fullscreen-button') this.toggleFullscreen();
+                    else if (target.id === 'episode-btn') this.showEpisodeList();
+                });
+
                 // Navigation zones (Click/Tap)
                 this.prevZone.addEventListener('click', this.prevPage.bind(this));
                 this.nextZone.addEventListener('click', this.nextPage.bind(this));
                 this.centerZone.addEventListener('click', this.toggleUI.bind(this));
-
-                // Buttons
-                this.prevButton.addEventListener('click', this.prevPage.bind(this));
-                this.nextButton.addEventListener('click', this.nextPage.bind(this));
-                this.fullscreenButton.addEventListener('click', this.toggleFullscreen.bind(this));
-                // Removed settings button listener
 
                 // Slider
                 this.pageSlider.addEventListener('input', this.onSliderInput.bind(this));
@@ -544,14 +692,13 @@
                 // Retry button
                 this.retryButton.addEventListener('click', this.retryLoad.bind(this));
 
-                // Removed settings options listeners
-
-                // Touch events
-                this.viewerContainer.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
+                // タッチイベントのパッシブオプションを確実に設定
+                const touchOptions = { passive: true };
+                this.viewerContainer.addEventListener('touchstart', this.handleTouchStart.bind(this), touchOptions);
+                // touchmoveはpreventDefaultが必要なためpassive: falseのまま
                 this.viewerContainer.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-                this.viewerContainer.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: true });
-                this.viewerContainer.addEventListener('touchcancel', this.handleTouchCancel.bind(this), { passive: true });
-
+                this.viewerContainer.addEventListener('touchend', this.handleTouchEnd.bind(this), touchOptions);
+                this.viewerContainer.addEventListener('touchcancel', this.handleTouchCancel.bind(this), touchOptions);
 
                 // Keyboard navigation
                 document.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -560,10 +707,8 @@
                 window.addEventListener('resize', this.handleResize.bind(this));
 
                 // Fullscreen change event
-                 document.addEventListener('fullscreenchange', this.updateFullscreenIcon.bind(this));
-                 document.addEventListener('webkitfullscreenchange', this.updateFullscreenIcon.bind(this));
-
-                // Removed theme detection listener
+                document.addEventListener('fullscreenchange', this.updateFullscreenIcon.bind(this));
+                document.addEventListener('webkitfullscreenchange', this.updateFullscreenIcon.bind(this));
             }
 
             // Removed static userSettings object
@@ -599,11 +744,59 @@
                 }
             }
 
+            showEpisodeList() {
+                const episodeOverlay = document.getElementById('episode-overlay');
+                const episodeList = document.getElementById('episode-list');
+
+                // リストをクリア
+                episodeList.innerHTML = '';
+
+                // 表紙・目次へのリンク
+                const coverItem = document.createElement('div');
+                coverItem.className = 'episode-item';
+                coverItem.textContent = '表紙・目次';
+                coverItem.addEventListener('click', () => {
+                    this.goToPage(0);
+                    episodeOverlay.classList.remove('active');
+                });
+                episodeList.appendChild(coverItem);
+
+                // 各エピソードへのリンク
+                this.episodeStructure.forEach(episode => {
+                    if (episode.id === 'frontmatter') return; // 表紙は既に追加済み
+
+                    const episodeItem = document.createElement('div');
+                    episodeItem.className = 'episode-item';
+
+                    // 現在のエピソードを強調表示
+                    if (this.currentPageIndex >= episode.startPage &&
+                        this.currentPageIndex <= episode.endPage) {
+                        episodeItem.classList.add('current');
+                    }
+
+                    episodeItem.textContent = episode.title;
+                    episodeItem.addEventListener('click', () => {
+                        this.goToPage(episode.startPage);
+                        episodeOverlay.classList.remove('active');
+                    });
+
+                    episodeList.appendChild(episodeItem);
+                });
+
+                // オーバーレイを表示
+                episodeOverlay.classList.add('active');
+
+                // 閉じるボタン
+                document.getElementById('close-episode-btn').addEventListener('click', () => {
+                    episodeOverlay.classList.remove('active');
+                });
+            }
+
             scheduleUiHide() {
                 this.clearUiHideTimeout();
                 this.uiHideTimeout = setTimeout(() => {
-                     // Removed check for isSettingsVisible
-                     this.hideUI();
+                    // Removed check for isSettingsVisible
+                    this.hideUI();
                 }, 3000);
             }
 
@@ -628,75 +821,90 @@
             }
 
             updateFullscreenIcon() {
-                 const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                 if (this.fullscreenEnterIcon && this.fullscreenExitIcon) {
-                     this.fullscreenEnterIcon.style.display = isFullscreen ? 'none' : 'block';
-                     this.fullscreenExitIcon.style.display = isFullscreen ? 'block' : 'none';
-                 }
+                const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (this.fullscreenEnterIcon && this.fullscreenExitIcon) {
+                    this.fullscreenEnterIcon.style.display = isFullscreen ? 'none' : 'block';
+                    this.fullscreenExitIcon.style.display = isFullscreen ? 'block' : 'none';
+                }
             }
 
             updatePageNumber() {
                 if (this.totalPages === 0) {
-                     this.pageNumber.textContent = "- / -";
-                     this.pageSlider.value = 1;
-                     this.pageSlider.max = 1;
-                     this.prevButton.disabled = true; // Also disable buttons initially
-                     this.nextButton.disabled = true;
-                     this.prevZone.style.pointerEvents = 'none';
-                     this.nextZone.style.pointerEvents = 'none';
-                     return;
+                    this.pageNumber.textContent = "- / -";
+                    this.pageSlider.value = 1;
+                    this.pageSlider.max = 1;
+                    this.prevButton.disabled = true;
+                    this.nextButton.disabled = true;
+                    this.prevZone.style.pointerEvents = 'none';
+                    this.nextZone.style.pointerEvents = 'none';
+                    return;
                 }
 
-                let displayedPage = this.currentPageIndex + 1;
-                this.pageNumber.textContent = `${displayedPage} / ${this.totalPages}`;
-                this.pageSlider.value = displayedPage;
-                this.pageSlider.max = this.totalPages;
+                // DOMの変更をバッチ処理
+                // パフォーマンスのため、リフローを引き起こす前に計算を完了
+                const isFirstPage = this.currentPageIndex === 0;
+                const isLastPage = this.currentPageIndex >= this.totalPages - 1;
+                const displayedPage = this.currentPageIndex + 1;
+                const pageNumberText = `${displayedPage} / ${this.totalPages}`;
 
-                 this.prevButton.disabled = this.currentPageIndex === 0;
-                 this.nextButton.disabled = this.currentPageIndex >= this.totalPages - 1;
-                 this.prevZone.style.pointerEvents = this.currentPageIndex === 0 ? 'none' : 'auto';
-                 this.nextZone.style.pointerEvents = this.currentPageIndex >= this.totalPages - 1 ? 'none' : 'auto';
+                // DOMの更新をバッチで実行
+                requestAnimationFrame(() => {
+                    this.pageNumber.textContent = pageNumberText;
+                    this.pageSlider.value = displayedPage;
+                    this.prevButton.disabled = isFirstPage;
+                    this.nextButton.disabled = isLastPage;
+                    this.prevZone.style.pointerEvents = isFirstPage ? 'none' : 'auto';
+                    this.nextZone.style.pointerEvents = isLastPage ? 'none' : 'auto';
+                });
             }
 
             prevPage() {
                 if (this.currentPageIndex > 0) {
                     this.goToPage(this.currentPageIndex - 1);
                 }
-                 this.showUI();
+                this.showUI();
             }
 
             nextPage() {
-                 // Simplified: always advance by 1 page index unit
-                 const increment = 1;
-                 if (this.currentPageIndex < this.totalPages - increment) {
+                // Simplified: always advance by 1 page index unit
+                const increment = 1;
+                if (this.currentPageIndex < this.totalPages - increment) {
                     this.goToPage(this.currentPageIndex + increment);
                 }
-                 this.showUI();
+                this.showUI();
             }
 
             goToPage(pageIndex) {
                 const newIndex = Math.max(0, Math.min(pageIndex, this.totalPages - 1));
                 if (newIndex === this.currentPageIndex && this.currentPage.src && this.currentPage.src !== "") {
-                     console.log("Already on page", newIndex);
-                     return;
+                    console.log("Already on page", newIndex);
+                    return;
                 }
 
                 this.currentPageIndex = newIndex;
                 this.resetZoom();
                 this.loadPage(this.currentPageIndex);
                 this.updatePageNumber();
-                this.saveBookmark(); // Save bookmark per manga (not episode specific key anymore)
-                 this.showUI();
+                this.saveBookmark();
+                this.showUI();
+
+                // 一定間隔でクリーンアップを実行
+                if (!this.pageChangeCount) this.pageChangeCount = 0;
+                if (this.pageChangeCount % 5 === 0) {
+                    // メインスレッドをブロックしないようにセットタイムアウトで遅延実行
+                    setTimeout(() => this.cleanupUnusedResources(), 500);
+                }
+                this.pageChangeCount++;
             }
 
             onSliderInput() {
-                 this.pageNumber.textContent = `${this.pageSlider.value} / ${this.totalPages}`;
-                 this.showUI(false);
-                 this.clearUiHideTimeout();
+                this.pageNumber.textContent = `${this.pageSlider.value} / ${this.totalPages}`;
+                this.showUI(false);
+                this.clearUiHideTimeout();
             }
             onSliderChange() {
-                 this.goToPage(parseInt(this.pageSlider.value) - 1);
-                 this.scheduleUiHide();
+                this.goToPage(parseInt(this.pageSlider.value) - 1);
+                this.scheduleUiHide();
             }
 
             retryLoad() {
@@ -719,9 +927,9 @@
             loadBookmark() {
                 if (!this.mangaData) return;
                 try {
-                     // Use manga ID as the key
-                     const key = `${this.mangaData.id}_bookmark`;
-                     const savedIndex = MangaViewer.bookmarks[key];
+                    // Use manga ID as the key
+                    const key = `${this.mangaData.id}_bookmark`;
+                    const savedIndex = MangaViewer.bookmarks[key];
 
                     if (savedIndex !== undefined && savedIndex >= 0 && savedIndex < this.totalPages) {
                         console.log(`Bookmark loaded (in memory): ${key} = ${savedIndex}`);
@@ -731,7 +939,7 @@
                     }
                 } catch (error) {
                     console.error('Error loading bookmark:', error);
-                     this.currentPageIndex = 0;
+                    this.currentPageIndex = 0;
                 }
             }
 
@@ -758,6 +966,13 @@
                     return;
                 }
 
+                // 既に同じ画像がロードされている場合はスキップ
+                if (this.currentPage.dataset.imageUrl === pageData.image_url) {
+                    this.loadingSpinner.style.display = 'none';
+                    this.isLoading = false;
+                    return;
+                }
+
                 // Function to load the single image
                 const loadImage = (imgElement, src) => {
                     return new Promise((resolve, reject) => {
@@ -767,11 +982,12 @@
                         img.onload = () => {
                             imgElement.src = src;
                             imgElement.style.backgroundColor = 'transparent';
+                            imgElement.dataset.imageUrl = src; // 画像URLを要素に記録
                             resolve();
                         };
                         img.onerror = (err) => {
                             console.error(`Error loading image: ${src}`, err);
-                             imgElement.style.backgroundColor = 'red';
+                            imgElement.style.backgroundColor = 'red';
                             reject(new Error(`画像 (${src.split('/').pop()}) の読み込み失敗`));
                         };
                         imgElement.src = ""; // Clear previous
@@ -783,8 +999,7 @@
                 // Load the primary page
                 loadImage(this.currentPage, pageData.image_url)
                     .then(() => {
-                         // Removed updatePageDisplay call (no double page logic)
-                         this.preloadAdjacentPages(pageIndex);
+                        this.preloadAdjacentPages(pageIndex);
                     })
                     .catch((error) => {
                         this.showError(error.message);
@@ -798,29 +1013,56 @@
             // Removed updatePageDisplay (no longer needed for single page mode)
 
             preloadAdjacentPages(currentIndex) {
-                // Preload next page
-                const nextIndex = currentIndex + 1;
-                if (nextIndex < this.totalPages) {
-                    const nextPageData = this.allPages[nextIndex];
-                    if (nextPageData && nextPageData.image_url) {
-                        const nextImg = new Image();
-                        nextImg.src = nextPageData.image_url;
-                        // console.log("Preloading next:", nextIndex + 1);
-                    }
+                // 読み込むページの優先順位付け
+                const pagesToPreload = [];
+
+                // 読み方向に基づいて、次のページを優先度高で追加
+                if (this.readingDirection === 'rtl') {
+                    // 右から左の場合、左側（前のインデックス）を先に
+                    if (currentIndex > 0) pagesToPreload.push({ index: currentIndex - 1, priority: 'high' });
+                    if (currentIndex + 1 < this.totalPages) pagesToPreload.push({ index: currentIndex + 1, priority: 'medium' });
+                } else {
+                    // 左から右の場合、右側（次のインデックス）を先に
+                    if (currentIndex + 1 < this.totalPages) pagesToPreload.push({ index: currentIndex + 1, priority: 'high' });
+                    if (currentIndex > 0) pagesToPreload.push({ index: currentIndex - 1, priority: 'medium' });
                 }
 
-                // Preload previous page
-                const prevIndex = currentIndex - 1;
-                if (prevIndex >= 0) {
-                    const prevPageData = this.allPages[prevIndex];
-                    if (prevPageData && prevPageData.image_url) {
-                        const prevImg = new Image();
-                        prevImg.src = prevPageData.image_url;
-                        // console.log("Preloading prev:", prevIndex + 1);
-                    }
+                // さらに2ページ先も低優先度でプリロード
+                if (this.readingDirection === 'rtl' && currentIndex > 1) {
+                    pagesToPreload.push({ index: currentIndex - 2, priority: 'low' });
+                } else if (this.readingDirection !== 'rtl' && currentIndex + 2 < this.totalPages) {
+                    pagesToPreload.push({ index: currentIndex + 2, priority: 'low' });
                 }
+
+                // プリロード実行（優先度高いものから）
+                pagesToPreload.forEach(({ index, priority }) => {
+                    const page = this.allPages[index];
+                    if (!page || !page.image_url) return;
+
+                    const img = new Image();
+                    // モダンブラウザのみサポート
+                    if (priority === 'high' && 'fetchPriority' in HTMLImageElement.prototype) {
+                        img.fetchPriority = 'high';
+                    }
+                    img.src = page.image_url;
+                });
             }
+            cleanupUnusedResources() {
+                // 現在のページから離れているページの画像参照をクリア
+                const currentImages = new Set();
+                const currentPage = this.currentPageIndex;
 
+                // 現在のページと隣接するページ（プリロード対象）だけを保持
+                for (let i = Math.max(0, currentPage - 1); i <= Math.min(this.totalPages - 1, currentPage + 1); i++) {
+                    if (this.allPages[i] && this.allPages[i].image_url) {
+                        currentImages.add(this.allPages[i].image_url);
+                    }
+                }
+
+                // ブラウザのメモリキャッシュは直接クリアできないため、
+                // イメージオブジェクトの明示的な解放がベストエフォートとなります
+                // 必要に応じてここに追加のクリーンアップロジックを実装できます
+            }
             showError(message) {
                 this.loadingSpinner.style.display = 'none';
                 this.errorText.textContent = message;
@@ -829,7 +1071,7 @@
             }
 
 
-           // --- Touch Event Handlers (largely unchanged, ensure no references to removed features) ---
+            // --- Touch Event Handlers (largely unchanged, ensure no references to removed features) ---
 
             handleTouchStart(e) {
                 this.showUI();
@@ -860,17 +1102,25 @@
             }
 
             handleTouchMove(e) {
+                // 処理が必要ない場合は早期リターン
+                if ((!this.isZooming && !this.isPanning) || e.touches.length === 0) return;
+
                 if (this.isZooming && e.touches.length === 2) {
                     e.preventDefault();
+
+                    // キャッシュを活用して計算を最適化
                     const touch1 = e.touches[0];
                     const touch2 = e.touches[1];
-                    const currentDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+                    const currentDistance = Math.hypot(
+                        touch2.clientX - touch1.clientX,
+                        touch2.clientY - touch1.clientY
+                    );
 
                     if (this.initialDistance > 0) {
-                        let newScale = this.initialScale * (currentDistance / this.initialDistance);
-                        newScale = Math.max(1, Math.min(newScale, 3)); // Clamp scale
-                        this.scale = newScale;
-                        // Simple scaling without complex center adjustment for now
+                        // 計算の簡略化と最適化
+                        const scaleFactor = currentDistance / this.initialDistance;
+                        this.scale = Math.max(1, Math.min(this.initialScale * scaleFactor, 3));
+
                         this.applyPanBoundaries();
                         this.updateZoom();
                     }
@@ -880,8 +1130,10 @@
                     const currentY = e.touches[0].clientY;
                     const deltaX = currentX - this.touchStartX;
                     const deltaY = currentY - this.touchStartY;
+
                     this.translateX = this.panStartX + deltaX;
                     this.translateY = this.panStartY + deltaY;
+
                     this.applyPanBoundaries();
                     this.updateZoom();
                 }
@@ -911,7 +1163,7 @@
                 }
                 this.lastTapTime = currentTime;
 
-                 if (!isDoubleTap && !this.isZooming && this.scale <= 1.05 && e.changedTouches.length === 1) {
+                if (!isDoubleTap && !this.isZooming && this.scale <= 1.05 && e.changedTouches.length === 1) {
                     const touchEndX = e.changedTouches[0].clientX;
                     const touchEndY = e.changedTouches[0].clientY;
                     const deltaX = touchEndX - this.touchStartX;
@@ -930,12 +1182,12 @@
 
                 if (this.isZooming && e.touches.length < 2) {
                     this.isZooming = false;
-                     if (this.scale < 1.05) {
-                         this.resetZoom();
-                         this.updateZoom();
-                     }
+                    if (this.scale < 1.05) {
+                        this.resetZoom();
+                        this.updateZoom();
+                    }
                 }
-                 if (this.isPanning && e.touches.length === 0) {
+                if (this.isPanning && e.touches.length === 0) {
                     this.isPanning = false;
                 }
 
@@ -943,27 +1195,30 @@
             }
 
             handleTouchCancel(e) {
-                 console.log("Touch cancelled");
-                 this.isZooming = false;
-                 this.isPanning = false;
-                 this.initialDistance = 0;
-                 this.scheduleUiHide();
+                console.log("Touch cancelled");
+                this.isZooming = false;
+                this.isPanning = false;
+                this.initialDistance = 0;
+                this.scheduleUiHide();
             }
 
 
             updateZoom() {
-                this.zoomContainer.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
-                 // Ensure transition is only applied during reset, not during drag/pinch
-                this.zoomContainer.style.transition = this.scale === 1 && this.translateX === 0 && this.translateY === 0 ? 'transform 0.3s ease' : 'none';
+                // scale=1の場合とそれ以外でトランジションを切り替え
+                const applyTransition = this.scale === 1 && this.translateX === 0 && this.translateY === 0;
+                this.zoomContainer.style.transition = applyTransition ? 'transform 0.3s ease' : 'none';
+
+                // transform3dを使用してハードウェアアクセラレーションを活用
+                this.zoomContainer.style.transform = `translate3d(${this.translateX}px, ${this.translateY}px, 0) scale(${this.scale})`;
             }
 
             resetZoom() {
-                 if (this.scale !== 1 || this.translateX !== 0 || this.translateY !== 0) {
+                if (this.scale !== 1 || this.translateX !== 0 || this.translateY !== 0) {
                     this.scale = 1;
                     this.translateX = 0;
                     this.translateY = 0;
                     this.updateZoom(); // This will now apply the transition
-                 }
+                }
             }
 
             applyPanBoundaries() {
@@ -986,15 +1241,15 @@
                         else this.prevPage();
                         break;
                     case 'ArrowRight':
-                         if (this.readingDirection === 'rtl') this.prevPage();
+                        if (this.readingDirection === 'rtl') this.prevPage();
                         else this.nextPage();
                         break;
                     case ' ':
                         this.nextPage();
                         break;
                     case 'Escape':
-                         // Removed settings toggle, only hide UI
-                         if (this.isUIVisible) this.hideUI();
+                        // Removed settings toggle, only hide UI
+                        if (this.isUIVisible) this.hideUI();
                         break;
                 }
             }
@@ -1007,7 +1262,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-             if (!window.mangaViewerInstance) {
+            if (!window.mangaViewerInstance) {
                 window.mangaViewerInstance = new MangaViewer();
             }
         });
