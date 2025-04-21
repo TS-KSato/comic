@@ -427,30 +427,25 @@
                 </svg>
             </button>
 
-            <div class="ui-overlay" id="bottom-overlay">
-                <!-- bottom-overlay の内容... -->
-                <div id="episode-navigation">
-                    <button class="ui-button" id="episode-btn" aria-label="エピソード選択">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                                d="M3,13h2v-2H3V13z M3,17h2v-2H3V17z M3,9h2V7H3V9z M7,13h14v-2H7V13z M7,17h14v-2H7V17z M7,7v2h14V7H7z">
-                            </path>
-                        </svg>
-                    </button>
-                </div>
+            <div id="episode-navigation">
+                <button class="ui-button" id="episode-btn" aria-label="エピソード選択">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M3,13h2v-2H3V13z M3,17h2v-2H3V17z M3,9h2V7H3V9z M7,13h14v-2H7V13z M7,17h14v-2H7V17z M7,7v2h14V7H7z">
+                        </path>
+                    </svg>
+                </button>
             </div>
-            <div id="episode-overlay" class="modal-overlay">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>エピソード選択</h2>
-                        <button id="close-episode-btn" class="ui-button">×</button>
-                    </div>
-                    <div id="episode-list"></div>
-                </div>
-            </div>
-
         </div>
-
+        <div id="episode-overlay" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>エピソード選択</h2>
+                    <button id="close-episode-btn" class="ui-button">×</button>
+                </div>
+                <div id="episode-list"></div>
+            </div>
+        </div>
         <!-- Settings panel Removed -->
 
         <!-- Loading spinner -->
