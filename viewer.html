@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Commercial Manga Viewer</title>
+    <style>
+        :root {
+            --primary-color: #4a6cf7;
+            --secondary-color: #ff6b6b;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --overlay-background: rgba(0, 0, 0, 0.7);
+            --overlay-text: #ffffff;
+            --button-background: rgba(255, 255, 255, 0.2);
+            --button-hover: rgba(255, 255, 255, 0.4);
+            --slider-track: rgba(255, 255, 255, 0.3);
+            --slider-thumb: #ffffff;
+            --spinner-color: #ffffff;
+            --error-color: #ff4d4d;
+        }
+
+        [data-theme="dark"] {
+            --background-color: #121212;
+            --text-color: #f1f1f1;
+            --overlay-background: rgba(0, 0, 0, 0.8);
+            --overlay-text: #ffffff;
+            --button-background: rgba(255, 255, 255, 0.2);
+            --button-hover: rgba(255, 255, 255, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: fixed;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        #viewer-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #manga-page-container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .manga-page {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transform-origin: center;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .manga-page.hidden {
+            display: none;
+        }
+
+        .manga-page.double-page-mode {
+            max-width: 50%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .manga-page.rtl {
+            order: 1;
+        }
+
+        .manga-page.ltr {
+            order: 2;
+        }
+
+        /* Navigation zones */
+        .nav-zone {
+            position: absolute;
+            height: 100%;
+            width: 30%;
+            top: 0;
+            z-index: 10;
+        }
+
+        #prev-zone {
+            left: 0;
+        }
+
+        #next-zone {
+            right: 0;
+        }
+
+        #center-zone {
+            left: 30%;
+            width: 40%;
+        }
+
+        /* UI Overlays */
+        .ui-overlay {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            color: var(--overlay-text);
+            background-color: var(--overlay-background);
+            z-index: 20;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #top-overlay {
+            top: 0;
+            transform: translateY(-100%);
+        }
+
+        #bottom-overlay {
+            bottom: 0;
+            transform: translateY(100%);
+        }
+
+        .show-ui #top-overlay {
+            transform: translateY(0);
+        }
+
+        .show-ui #bottom-overlay {
+            transform: translateY(0);
+        }
+
+        .ui-hidden .ui-overlay {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Buttons and controls */
+        .ui-button {
+            background-color: var(--button-background);
+            border: none;
+            color: var(--overlay-text);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .ui-button:hover,
+        .ui-button:active {
+            background-color: var(--button-hover);
+        }
+
+        .ui-button svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        /* Page slider */
+        #page-slider-container {
+            flex-grow: 1;
+            margin: 0 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        #page-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--slider-track);
+            outline: none;
+        }
+
+        #page-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--slider-thumb);
+            cursor: pointer;
+        }
+
+        #page-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--slider-thumb);
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Settings panel */
+        #settings-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--overlay-background);
+            z-index: 30;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+        }
+
+        #settings-panel.show {
+            transform: translateY(0);
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+        }
+
+        .settings-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--overlay-text);
+        }
+
+        .settings-options {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .settings-option {
+            flex: 1;
+            padding: 10px;
+            background-color: var(--button-background);
+            color: var(--overlay-text);
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .settings-option.active {
+            background-color: var(--primary-color);
+        }
+
+        /* Loading spinner */
+        #loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--spinner-color);
+            animation: spin 1s ease-in-out infinite;
+            z-index: 40;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+
+        /* Error message */
+        #error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--error-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            max-width: 80%;
+            text-align: center;
+            z-index: 40;
+            display: none;
+        }
+
+        #retry-button {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: white;
+            color: var(--error-color);
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* Zoom container */
+        #zoom-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="viewer-container">
+        <!-- Zoom container -->
+        <div id="zoom-container">
+            <!-- Manga page container -->
+            <div id="manga-page-container">
+                <!-- Pages are loaded here dynamically -->
+                <img src="/api/placeholder/500/700" alt="Manga page" class="manga-page" id="current-page">
+                <!-- For double page mode -->
+                <img src="/api/placeholder/500/700" alt="Manga page" class="manga-page hidden" id="second-page">
+            </div>
+        </div>
+
+        <!-- Navigation zones -->
+        <div class="nav-zone" id="prev-zone"></div>
+        <div class="nav-zone" id="center-zone"></div>
+        <div class="nav-zone" id="next-zone"></div>
+
+        <!-- Top UI overlay -->
+        <div class="ui-overlay" id="top-overlay">
+            <div id="content-title">Manga Title - Episode 1</div>
+            <div id="page-number">1 / 30</div>
+            <button class="ui-button" id="settings-button">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Bottom UI overlay -->
+        <div class="ui-overlay" id="bottom-overlay">
+            <button class="ui-button" id="prev-button">
+                <svg viewBox="0 0 24 24">
+                    <path d="M15.41,16.59L10.83,12l4.58-4.59L14,6l-6,6l6,6L15.41,16.59z"></path>
+                </svg>
+            </button>
+
+            <div id="page-slider-container">
+                <input type="range" min="1" max="30" value="1" id="page-slider">
+            </div>
+
+            <button class="ui-button" id="next-button">
+                <svg viewBox="0 0 24 24">
+                    <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6l6,6l-6,6L8.59,16.59z"></path>
+                </svg>
+            </button>
+
+            <button class="ui-button" id="fullscreen-button">
+                <svg viewBox="0 0 24 24">
+                    <path d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Settings panel -->
+        <div id="settings-panel">
+            <div class="settings-group">
+                <div class="settings-title">表示モード (Display Mode)</div>
+                <div class="settings-options">
+                    <button class="settings-option active" data-value="single" id="single-page-mode">単ページ
+                        (Single)</button>
+                    <button class="settings-option" data-value="double" id="double-page-mode">見開き (Double)</button>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-title">フィットモード (Fit Mode)</div>
+                <div class="settings-options">
+                    <button class="settings-option active" data-value="fit_screen" id="fit-screen">画面 (Screen)</button>
+                    <button class="settings-option" data-value="fit_width" id="fit-width">幅 (Width)</button>
+                    <button class="settings-option" data-value="fit_height" id="fit-height">高さ (Height)</button>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-title">テーマ (Theme)</div>
+                <div class="settings-options">
+                    <button class="settings-option active" data-value="light" id="light-theme">ライト (Light)</button>
+                    <button class="settings-option" data-value="dark" id="dark-theme">ダーク (Dark)</button>
+                    <button class="settings-option" data-value="system" id="system-theme">システム (System)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading spinner -->
+        <div id="loading-spinner"></div>
+
+        <!-- Error message -->
+        <div id="error-message">
+            <div id="error-text">読み込みに失敗しました。</div>
+            <button id="retry-button">再試行</button>
+        </div>
+    </div>
+
+    <script>
+        // Main viewer class
+        class MangaViewer {
+            constructor() {
+                // DOM elements
+                this.viewerContainer = document.getElementById('viewer-container');
+                this.zoomContainer = document.getElementById('zoom-container');
+                this.pageContainer = document.getElementById('manga-page-container');
+                this.currentPage = document.getElementById('current-page');
+                this.secondPage = document.getElementById('second-page');
+                this.topOverlay = document.getElementById('top-overlay');
+                this.bottomOverlay = document.getElementById('bottom-overlay');
+                this.pageSlider = document.getElementById('page-slider');
+                this.pageNumber = document.getElementById('page-number');
+                this.contentTitle = document.getElementById('content-title');
+                this.loadingSpinner = document.getElementById('loading-spinner');
+                this.errorMessage = document.getElementById('error-message');
+                this.errorText = document.getElementById('error-text');
+                this.retryButton = document.getElementById('retry-button');
+                this.settingsPanel = document.getElementById('settings-panel');
+
+                // Navigation zones
+                this.prevZone = document.getElementById('prev-zone');
+                this.nextZone = document.getElementById('next-zone');
+                this.centerZone = document.getElementById('center-zone');
+
+                // Buttons
+                this.prevButton = document.getElementById('prev-button');
+                this.nextButton = document.getElementById('next-button');
+                this.fullscreenButton = document.getElementById('fullscreen-button');
+                this.settingsButton = document.getElementById('settings-button');
+
+                // Settings options
+                this.singlePageMode = document.getElementById('single-page-mode');
+                this.doublePageMode = document.getElementById('double-page-mode');
+                this.fitScreen = document.getElementById('fit-screen');
+                this.fitWidth = document.getElementById('fit-width');
+                this.fitHeight = document.getElementById('fit-height');
+                this.lightTheme = document.getElementById('light-theme');
+                this.darkTheme = document.getElementById('dark-theme');
+                this.systemTheme = document.getElementById('system-theme');
+
+                // State variables
+                this.currentPageIndex = 0;
+                this.totalPages = 30; // Default, will be updated from API
+                this.isDoublePage = false; // Default to single page mode
+                this.readingDirection = 'rtl'; // Default to right-to-left (Japanese manga)
+                this.fitMode = 'fit_screen'; // Default fit mode
+                this.theme = 'light'; // Default theme
+                this.isUIVisible = true;
+                this.isSettingsVisible = false;
+                this.uiHideTimeout = null;
+
+                // Touch handling variables
+                this.touchStartX = 0;
+                this.touchStartY = 0;
+                this.lastTapTime = 0;
+
+                // Zoom variables
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.initialDistance = 0;
+                this.isZooming = false;
+
+                // Mock manga data (would come from API)
+                this.mangaData = {
+                    id: 'manga123',
+                    title: 'KARMA',
+                    frontMatter: [
+                        { page_number: 1, image_url: 'i_001.png', type: 'cover' },
+                        { page_number: 2, image_url: 'i_002.png', type: 'contents' }
+                    ],
+                    episodes: [
+                        {
+                            id: 'episode1',
+                            title: '第1話 (Episode 1)',
+                            pages: [
+                                { page_number: 3, image_url: 'i_003.png' },
+                                { page_number: 4, image_url: 'i_004.png' },
+                                { page_number: 5, image_url: 'i_005.png' },
+                                { page_number: 6, image_url: 'i_006.png' },
+                                { page_number: 7, image_url: 'i_007.png' },
+                                { page_number: 8, image_url: 'i_008.png' },
+                                { page_number: 9, image_url: 'i_009.png' },
+                                { page_number: 10, image_url: 'i_010.png' },
+                                { page_number: 1, image_url: 'i_011.png' },
+                                { page_number: 2, image_url: 'i_012.png' },
+                                { page_number: 3, image_url: 'i_013.png' }
+                            ]
+                        },
+                        {
+                            id: 'episode2',
+                            title: '第2話 (Episode 2)',
+                            pages: [
+
+                                { page_number: 4, image_url: 'i_014.png' },
+                                { page_number: 5, image_url: 'i_015.png' },
+                                { page_number: 6, image_url: 'i_016.png' },
+                                { page_number: 7, image_url: 'i_017.png' },
+                                { page_number: 8, image_url: 'i_018.png' },
+                                { page_number: 9, image_url: 'i_019.png' },
+                                { page_number: 10, image_url: 'i_020.png' },
+                                { page_number: 1, image_url: 'i_021.png' },
+                                { page_number: 2, image_url: 'i_022.png' }
+                            ]
+                        },
+                        {
+                            id: 'episode3',
+                            title: '第3話 (Episode 3)',
+                            pages: [
+
+                                { page_number: 3, image_url: 'i_023.png' },
+                                { page_number: 4, image_url: 'i_024.png' },
+                                { page_number: 5, image_url: 'i_025.png' },
+                                { page_number: 6, image_url: 'i_026.png' },
+                                { page_number: 7, image_url: 'i_027.png' },
+                                { page_number: 8, image_url: 'i_028.png' },
+                                { page_number: 9, image_url: 'i_029.png' },
+                                { page_number: 1, image_url: 'i_030.png' },
+                                { page_number: 2, image_url: 'i_031.png' }
+                            ]
+                        },
+                        {
+                            id: 'episode4',
+                            title: '第4話 (Episode 4)',
+                            pages: [
+
+                                { page_number: 3, image_url: 'i_032.png' },
+                                { page_number: 4, image_url: 'i_033.png' },
+                                { page_number: 5, image_url: 'i_034.png' },
+                                { page_number: 6, image_url: 'i_035.png' },
+                                { page_number: 7, image_url: 'i_036.png' },
+                                { page_number: 8, image_url: 'i_037.png' },
+                                { page_number: 9, image_url: 'i_038.png' },
+                                { page_number: 10, image_url: 'i_039.png' },
+                                { page_number: 1, image_url: 'i_040.png' }
+                            ]
+                        },
+                        {
+                            id: 'episode5',
+                            title: '第5話 (Episode 5)',
+                            pages: [
+
+                                { page_number: 2, image_url: 'i_041.png' },
+                                { page_number: 3, image_url: 'i_042.png' },
+                                { page_number: 4, image_url: 'i_043.png' },
+                                { page_number: 5, image_url: 'i_044.png' },
+                                { page_number: 6, image_url: 'i_045.png' },
+                                { page_number: 7, image_url: 'i_046.png' },
+                                { page_number: 8, image_url: 'i_047.png' },
+                                { page_number: 9, image_url: 'i_048.png' }
+                            ]
+                        }
+                    ],
+                    currentEpisodeIndex: 0, // 現在表示中のエピソードインデックス
+                    reading_direction: 'rtl'
+                };
+
+                // Initialize the viewer
+                this.init();
+            }
+
+            init() {
+                // Load manga data (mock for demo)
+                this.loadMangaData();
+
+                // Set up event listeners
+                this.setupEventListeners();
+
+                // Apply initial settings
+                this.loadSavedSettings();
+                this.applyTheme();
+                this.applyFitMode();
+
+                // Show UI initially and set timer to hide
+                this.showUI();
+            }
+
+            loadMangaData() {
+                // In a real app, this would fetch data from the API
+                // For demo, we're using mock data
+                this.loadingSpinner.style.display = 'block';
+
+                // Simulate API call
+                setTimeout(() => {
+                    // Update content info
+                    const currentEpisode = this.mangaData.episodes[this.mangaData.currentEpisodeIndex];
+                    this.totalPages = currentEpisode.pages.length;
+                    this.contentTitle.textContent = `${this.mangaData.title} - ${currentEpisode.title}`;
+
+                    // Update slider
+                    this.pageSlider.max = this.totalPages;
+
+                    // Update page display
+                    this.updatePageNumber();
+                    this.loadPage(this.currentPageIndex);
+
+                    // Hide loading spinner
+                    this.loadingSpinner.style.display = 'none';
+                }, 1000);
+            }
+
+            setupEventListeners() {
+                // Navigation zones
+                this.prevZone.addEventListener('click', () => this.prevPage());
+                this.nextZone.addEventListener('click', () => this.nextPage());
+                this.centerZone.addEventListener('click', () => this.toggleUI());
+
+                // Buttons
+                this.prevButton.addEventListener('click', () => this.prevPage());
+                this.nextButton.addEventListener('click', () => this.nextPage());
+                this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
+                this.settingsButton.addEventListener('click', () => this.toggleSettings());
+
+                // Slider
+                this.pageSlider.addEventListener('input', () => {
+                    this.goToPage(parseInt(this.pageSlider.value) - 1);
+                });
+
+                // Retry button
+                this.retryButton.addEventListener('click', () => {
+                    this.errorMessage.style.display = 'none';
+                    this.loadMangaData();
+                });
+
+                // Settings options
+                this.singlePageMode.addEventListener('click', () => this.setPageMode('single'));
+                this.doublePageMode.addEventListener('click', () => this.setPageMode('double'));
+                this.fitScreen.addEventListener('click', () => this.setFitMode('fit_screen'));
+                this.fitWidth.addEventListener('click', () => this.setFitMode('fit_width'));
+                this.fitHeight.addEventListener('click', () => this.setFitMode('fit_height'));
+                this.lightTheme.addEventListener('click', () => this.setTheme('light'));
+                this.darkTheme.addEventListener('click', () => this.setTheme('dark'));
+                this.systemTheme.addEventListener('click', () => this.setTheme('system'));
+
+                // Touch events for swipe navigation
+                this.viewerContainer.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
+                this.viewerContainer.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: true });
+                this.viewerContainer.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: true });
+
+                // Pinch zoom events
+                this.viewerContainer.addEventListener('touchstart', (e) => this.handleZoomStart(e), { passive: true });
+                this.viewerContainer.addEventListener('touchmove', (e) => this.handleZoomMove(e), { passive: true });
+                this.viewerContainer.addEventListener('touchend', (e) => this.handleZoomEnd(e), { passive: true });
+
+                // Double tap for zoom
+                this.viewerContainer.addEventListener('touchend', (e) => this.handleDoubleTap(e), { passive: true });
+
+                // Window resize event
+                window.addEventListener('resize', () => this.handleResize());
+
+                // Theme detection
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                    if (this.theme === 'system') {
+                        this.applyTheme();
+                    }
+                });
+            }
+
+            // メモリ内に設定を保持する変数
+            static userSettings = {
+                pageMode: 'single',
+                fitMode: 'fit_screen',
+                theme: 'light'
+            };
+
+            loadSavedSettings() {
+                // メモリ内の設定を使用
+                try {
+                    const settings = MangaViewer.userSettings;
+
+                    // 設定を適用
+                    if (settings.pageMode) this.setPageMode(settings.pageMode, false);
+                    if (settings.fitMode) this.setFitMode(settings.fitMode, false);
+                    if (settings.theme) this.setTheme(settings.theme, false);
+                } catch (error) {
+                    console.error('Error loading saved settings:', error);
+                }
+            }
+
+            saveSettings() {
+                // メモリ内の変数に設定を保存
+                try {
+                    MangaViewer.userSettings = {
+                        pageMode: this.isDoublePage ? 'double' : 'single',
+                        fitMode: this.fitMode,
+                        theme: this.theme
+                    };
+                } catch (error) {
+                    console.error('Error saving settings:', error);
+                }
+            }
+
+            showUI() {
+                // Show UI overlays
+                this.viewerContainer.classList.add('show-ui');
+                this.viewerContainer.classList.remove('ui-hidden');
+                this.isUIVisible = true;
+
+                // Clear any existing timeout
+                if (this.uiHideTimeout) {
+                    clearTimeout(this.uiHideTimeout);
+                }
+
+                // Set timeout to hide UI after inactivity
+                this.uiHideTimeout = setTimeout(() => {
+                    this.hideUI();
+                }, 3000);
+            }
+
+            hideUI() {
+                // Hide UI overlays
+                this.viewerContainer.classList.add('ui-hidden');
+                this.isUIVisible = false;
+
+                // Also hide settings if open
+                if (this.isSettingsVisible) {
+                    this.toggleSettings();
+                }
+            }
+
+            toggleUI() {
+                if (this.isUIVisible) {
+                    this.hideUI();
+                } else {
+                    this.showUI();
+                }
+            }
+
+            toggleSettings() {
+                if (this.isSettingsVisible) {
+                    this.settingsPanel.classList.remove('show');
+                    this.isSettingsVisible = false;
+                } else {
+                    this.settingsPanel.classList.add('show');
+                    this.isSettingsVisible = true;
+                    this.showUI(); // Make sure UI is visible when showing settings
+                }
+            }
+
+            setPageMode(mode, save = true) {
+                this.isDoublePage = mode === 'double';
+
+                // Update active button
+                this.singlePageMode.classList.toggle('active', !this.isDoublePage);
+                this.doublePageMode.classList.toggle('active', this.isDoublePage);
+
+                // Apply the page mode
+                this.updatePageDisplay();
+
+                // Save settings if needed
+                if (save) this.saveSettings();
+            }
+
+            setFitMode(mode, save = true) {
+                this.fitMode = mode;
+
+                // Update active button
+                this.fitScreen.classList.toggle('active', mode === 'fit_screen');
+                this.fitWidth.classList.toggle('active', mode === 'fit_width');
+                this.fitHeight.classList.toggle('active', mode === 'fit_height');
+
+                // Apply the fit mode
+                this.applyFitMode();
+
+                // Save settings if needed
+                if (save) this.saveSettings();
+            }
+
+            applyFitMode() {
+                // Reset zoom first
+                this.resetZoom();
+
+                // Apply fit mode to current page(s)
+                switch (this.fitMode) {
+                    case 'fit_width':
+                        // Set width to 100% and height to auto
+                        this.currentPage.style.width = '100%';
+                        this.currentPage.style.height = 'auto';
+                        this.secondPage.style.width = '100%';
+                        this.secondPage.style.height = 'auto';
+                        break;
+                    case 'fit_height':
+                        // Set height to 100% and width to auto
+                        this.currentPage.style.width = 'auto';
+                        this.currentPage.style.height = '100%';
+                        this.secondPage.style.width = 'auto';
+                        this.secondPage.style.height = '100%';
+                        break;
+                    case 'fit_screen':
+                    default:
+                        // Reset to default (constrained to container)
+                        this.currentPage.style.width = '';
+                        this.currentPage.style.height = '';
+                        this.secondPage.style.width = '';
+                        this.secondPage.style.height = '';
+                        break;
+                }
+            }
+
+            setTheme(theme, save = true) {
+                this.theme = theme;
+
+                // Update active button
+                this.lightTheme.classList.toggle('active', theme === 'light');
+                this.darkTheme.classList.toggle('active', theme === 'dark');
+                this.systemTheme.classList.toggle('active', theme === 'system');
+
+                // Apply the theme
+                this.applyTheme();
+
+                // Save settings if needed
+                if (save) this.saveSettings();
+            }
+
+            applyTheme() {
+                let effectiveTheme = this.theme;
+
+                // If system theme, check system preference
+                if (this.theme === 'system') {
+                    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+
+                // Apply theme to document body
+                document.body.dataset.theme = effectiveTheme;
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    // Enter fullscreen mode
+                    if (this.viewerContainer.requestFullscreen) {
+                        this.viewerContainer.requestFullscreen();
+                    } else if (this.viewerContainer.webkitRequestFullscreen) { // Safari
+                        this.viewerContainer.webkitRequestFullscreen();
+                    } else if (this.viewerContainer.msRequestFullscreen) { // IE11
+                        this.viewerContainer.msRequestFullscreen();
+                    }
+                } else {
+                    // Exit fullscreen mode
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) { // Safari
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) { // IE11
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+
+            updatePageNumber() {
+                this.pageNumber.textContent = `${this.currentPageIndex + 1} / ${this.totalPages}`;
+                this.pageSlider.value = this.currentPageIndex + 1;
+            }
+
+            prevPage() {
+                if (this.currentPageIndex > 0) {
+                    this.goToPage(this.currentPageIndex - 1);
+                }
+                this.showUI();
+            }
+
+            nextPage() {
+                if (this.currentPageIndex < this.totalPages - 1) {
+                    this.goToPage(this.currentPageIndex + 1);
+                }
+                this.showUI();
+            }
+
+            goToPage(pageIndex) {
+                if (pageIndex >= 0 && pageIndex < this.totalPages) {
+                    this.currentPageIndex = pageIndex;
+                    this.loadPage(pageIndex);
+                    this.updatePageNumber();
+                    this.saveBookmark();
+                }
+            }
+
+            // ブックマークをメモリ内に保持する静的オブジェクト
+            static bookmarks = {};
+
+            saveBookmark() {
+                // 実際のアプリでは、サーバーにブックマークを送信します
+                // デモでは、メモリ内に保存します
+                try {
+                    const key = `${this.mangaData.id}_${this.mangaData.episode.id}`;
+                    MangaViewer.bookmarks[key] = this.currentPageIndex;
+                    console.log(`Bookmark saved: ${key} = ${this.currentPageIndex}`);
+                } catch (error) {
+                    console.error('Error saving bookmark:', error);
+                }
+            }
+
+            loadBookmark() {
+                // 実際のアプリでは、サーバーからブックマークを取得します
+                // デモでは、メモリから読み込みます
+                try {
+                    const key = `${this.mangaData.id}_${this.mangaData.episode.id}`;
+                    const pageIndex = MangaViewer.bookmarks[key];
+                    if (pageIndex !== undefined) {
+                        if (pageIndex >= 0 && pageIndex < this.totalPages) {
+                            console.log(`Bookmark loaded: ${key} = ${pageIndex}`);
+                            this.goToPage(pageIndex);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading bookmark:', error);
+                }
+            }
+
+            loadPage(pageIndex) {
+                // Reset zoom first
+                this.resetZoom();
+
+                // Show loading spinner
+                this.loadingSpinner.style.display = 'block';
+
+                // In a real app, this would load images from the server
+                // For demo, we're using placeholder images
+                const pageData = this.mangaData.episode.pages[pageIndex];
+
+                // Preload current page
+                const currentPageImg = new Image();
+                currentPageImg.onload = () => {
+                    this.currentPage.src = currentPageImg.src;
+                    this.loadingSpinner.style.display = 'none';
+
+                    // After loading current page, update display
+                    this.updatePageDisplay();
+
+                    // Preload next/previous pages
+                    this.preloadAdjacentPages(pageIndex);
+                };
+                currentPageImg.onerror = () => {
+                    this.showError('画像の読み込みに失敗しました。');
+                };
+                currentPageImg.src = pageData.image_url;
+
+                // If double page mode and not the last page, load second page
+                if (this.isDoublePage && pageIndex < this.totalPages - 1) {
+                    const nextPageData = this.mangaData.episode.pages[pageIndex + 1];
+                    const secondPageImg = new Image();
+                    secondPageImg.onload = () => {
+                        this.secondPage.src = secondPageImg.src;
+                    };
+                    secondPageImg.onerror = () => {
+                        console.error('Error loading second page');
+                    };
+                    secondPageImg.src = nextPageData.image_url;
+                }
+            }
+
+            updatePageDisplay() {
+                // Update based on page mode (single or double)
+                if (this.isDoublePage && this.currentPageIndex < this.totalPages - 1) {
+                    // Show both pages in double page mode
+                    this.currentPage.classList.add('double-page-mode');
+                    this.secondPage.classList.add('double-page-mode');
+                    this.secondPage.classList.remove('hidden');
+
+                    // Set reading direction
+                    if (this.readingDirection === 'rtl') {
+                        this.currentPage.classList.add('rtl');
+                        this.currentPage.classList.remove('ltr');
+                        this.secondPage.classList.add('ltr');
+                        this.secondPage.classList.remove('rtl');
+                    } else {
+                        this.currentPage.classList.add('ltr');
+                        this.currentPage.classList.remove('rtl');
+                        this.secondPage.classList.add('rtl');
+                        this.secondPage.classList.remove('ltr');
+                    }
+                } else {
+                    // Show only current page in single page mode
+                    this.currentPage.classList.remove('double-page-mode');
+                    this.secondPage.classList.add('hidden');
+                }
+
+                // Apply fit mode
+                this.applyFitMode();
+            }
+
+            preloadAdjacentPages(currentIndex) {
+                // Preload next page if not the last
+                if (currentIndex < this.totalPages - 1) {
+                    const nextPageData = this.mangaData.episode.pages[currentIndex + 1];
+                    const nextImg = new Image();
+                    nextImg.src = nextPageData.image_url;
+                }
+
+                // Preload previous page if not the first
+                if (currentIndex > 0) {
+                    const prevPageData = this.mangaData.episode.pages[currentIndex - 1];
+                    const prevImg = new Image();
+                    prevImg.src = prevPageData.image_url;
+                }
+            }
+
+            showError(message) {
+                this.loadingSpinner.style.display = 'none';
+                this.errorText.textContent = message;
+                this.errorMessage.style.display = 'block';
+            }
+
+            // Touch handling for swipe navigation
+            handleTouchStart(e) {
+                if (e.touches.length === 1) {
+                    this.touchStartX = e.touches[0].clientX;
+                    this.touchStartY = e.touches[0].clientY;
+                }
+            }
+
+            handleTouchMove(e) {
+                // Don't handle swipes while zooming
+                if (this.isZooming || this.scale > 1) return;
+
+                if (e.touches.length === 1) {
+                    const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
+
+                    // Calculate distance moved
+                    const deltaX = touchX - this.touchStartX;
+                    const deltaY = touchY - this.touchStartY;
+
+                    // Only handle horizontal swipes (prevent conflicts with vertical scrolling)
+                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                        e.preventDefault(); // Prevent default only for significant horizontal swipes
+                    }
+                }
+            }
+
+            handleTouchEnd(e) {
+                // Don't handle swipes while zooming
+                if (this.isZooming || this.scale > 1) return;
+
+                if (e.changedTouches.length === 1) {
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+
+                    // Calculate distance moved
+                    const deltaX = touchEndX - this.touchStartX;
+                    const deltaY = touchEndY - this.touchStartY;
+
+                    // Detect horizontal swipe
+                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                        // Determine swipe direction relative to reading direction
+                        if (this.readingDirection === 'rtl') {
+                            // For right-to-left reading, swipe left means next page
+                            if (deltaX < 0) {
+                                this.nextPage();
+                            } else {
+                                this.prevPage();
+                            }
+                        } else {
+                            // For left-to-right reading, swipe right means next page
+                            if (deltaX > 0) {
+                                this.nextPage();
+                            } else {
+                                this.prevPage();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Zoom handling
+            handleZoomStart(e) {
+                if (e.touches.length === 2) {
+                    // Calculate initial distance between two touches
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    this.initialDistance = Math.hypot(
+                        touch2.clientX - touch1.clientX,
+                        touch2.clientY - touch1.clientY
+                    );
+                    this.isZooming = true;
+                }
+            }
+
+            handleZoomMove(e) {
+                if (this.isZooming && e.touches.length === 2) {
+                    // Calculate current distance between touches
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const currentDistance = Math.hypot(
+                        touch2.clientX - touch1.clientX,
+                        touch2.clientY - touch1.clientY
+                    );
+
+                    // Calculate new scale based on change in distance
+                    const newScale = (this.scale * currentDistance) / this.initialDistance;
+
+                    // Limit scale between 1 and 3
+                    if (newScale >= 1 && newScale <= 3) {
+                        this.scale = newScale;
+                        this.updateZoom();
+                    }
+                } else if (this.scale > 1 && e.touches.length === 1) {
+                    // Pan the image when zoomed in
+                    const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
+
+                    // Calculate distance moved
+                    const deltaX = touchX - this.touchStartX;
+                    const deltaY = touchY - this.touchStartY;
+
+                    // Update touch start position
+                    this.touchStartX = touchX;
+                    this.touchStartY = touchY;
+
+                    // Update translation (with boundaries to prevent moving too far)
+                    const maxTranslateX = (this.scale - 1) * this.zoomContainer.clientWidth / 2;
+                    const maxTranslateY = (this.scale - 1) * this.zoomContainer.clientHeight / 2;
+
+                    this.translateX += deltaX;
+                    this.translateY += deltaY;
+
+                    // Apply boundaries
+                    this.translateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, this.translateX));
+                    this.translateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, this.translateY));
+
+                    this.updateZoom();
+                }
+            }
+
+            handleZoomEnd(e) {
+                if (this.isZooming) {
+                    this.isZooming = false;
+                    this.initialDistance = 0;
+
+                    // If scale is close to 1, reset zoom
+                    if (this.scale < 1.1) {
+                        this.resetZoom();
+                    }
+                }
+            }
+
+            handleDoubleTap(e) {
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - this.lastTapTime;
+
+                if (tapLength < 300 && tapLength > 0) {
+                    // Double tap detected
+                    e.preventDefault();
+
+                    if (this.scale === 1) {
+                        // Zoom in to 2x at the tap position
+                        this.scale = 2;
+
+                        // Calculate tap position relative to container
+                        const rect = this.zoomContainer.getBoundingClientRect();
+                        const tapX = e.changedTouches[0].clientX - rect.left;
+                        const tapY = e.changedTouches[0].clientY - rect.top;
+
+                        // Adjust translation to zoom into tap position
+                        this.translateX = (this.zoomContainer.clientWidth / 2 - tapX) * (this.scale - 1) / this.scale;
+                        this.translateY = (this.zoomContainer.clientHeight / 2 - tapY) * (this.scale - 1) / this.scale;
+                    } else {
+                        // Zoom out
+                        this.resetZoom();
+                    }
+
+                    this.updateZoom();
+                }
+
+                this.lastTapTime = currentTime;
+            }
+
+            updateZoom() {
+                this.zoomContainer.style.transform = `scale(${this.scale}) translate(${this.translateX}px, ${this.translateY}px)`;
+            }
+
+            resetZoom() {
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.zoomContainer.style.transform = 'scale(1) translate(0px, 0px)';
+            }
+
+            handleResize() {
+                // Reset zoom on resize
+                this.resetZoom();
+
+                // Re-apply fit mode
+                this.applyFitMode();
+            }
+        }
+
+        // Initialize the viewer when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            // Create and initialize the manga viewer
+            const viewer = new MangaViewer();
+        });
+    </script>
+</body>
+
+</html>
