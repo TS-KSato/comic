@@ -554,27 +554,86 @@
                     id: 'manga123',
                     title: 'KARMA',
                     frontMatter: [
-                        { page_number: 1, image_url: 'https://via.placeholder.com/800x1200/CCCCCC/000000?text=Cover+Page+1', type: 'cover' },
-                        // { page_number: 2, image_url: 'https://via.placeholder.com/800x1200/AAAAAA/000000?text=Contents+Page+2', type: 'contents' }
+                        { page_number: 1, image_url: 'i_001.jpg', type: 'cover' },
+                        { page_number: 2, image_url: 'i_002.jpg', type: 'contents' }
                     ],
                     episodes: [
                         {
                             id: 'episode1',
-                            title: '第1話',
-                            pages: Array.from({ length: 10 }, (_, i) => ({
-                                page_number: i + 3, // Start page number from 3 for this episode
-                                image_url: `https://via.placeholder.com/800x1200/${Math.floor(Math.random()*16777215).toString(16)}/000?text=Ep1+Page+${i + 1}`
-                            }))
+                            title: '第1話 (Episode 1)',
+                            pages: [
+                                { page_number: 3, image_url: 'i_003.jpg' },
+                                { page_number: 4, image_url: 'i_004.jpg' },
+                                { page_number: 5, image_url: 'i_005.jpg' },
+                                { page_number: 6, image_url: 'i_006.jpg' },
+                                { page_number: 7, image_url: 'i_007.jpg' },
+                                { page_number: 8, image_url: 'i_008.jpg' },
+                                { page_number: 9, image_url: 'i_009.jpg' },
+                                { page_number: 10, image_url: 'i_010.jpg' },
+                                { page_number: 11, image_url: 'i_011.jpg' }, // 元のデータでは page_number が 1 になっていたため修正
+                                { page_number: 12, image_url: 'i_012.jpg' }, // 元のデータでは page_number が 2 になっていたため修正
+                                { page_number: 13, image_url: 'i_013.jpg' }  // 元のデータでは page_number が 3 になっていたため修正
+                            ]
                         },
-                         {
+                        {
                             id: 'episode2',
-                            title: '第2話',
-                            pages: Array.from({ length: 8 }, (_, i) => ({
-                                page_number: i + 1,
-                                image_url: `https://via.placeholder.com/800x1200/${Math.floor(Math.random()*16777215).toString(16)}/000?text=Ep2+Page+${i + 1}`
-                            }))
+                            title: '第2話 (Episode 2)',
+                            pages: [
+                                { page_number: 14, image_url: 'i_014.jpg' }, // page_number を連番に変更
+                                { page_number: 15, image_url: 'i_015.jpg' },
+                                { page_number: 16, image_url: 'i_016.jpg' },
+                                { page_number: 17, image_url: 'i_017.jpg' },
+                                { page_number: 18, image_url: 'i_018.jpg' },
+                                { page_number: 19, image_url: 'i_019.jpg' },
+                                { page_number: 20, image_url: 'i_020.jpg' },
+                                { page_number: 21, image_url: 'i_021.jpg' },
+                                { page_number: 22, image_url: 'i_022.jpg' }
+                            ]
                         },
-                       // Add more episodes as needed
+                        {
+                            id: 'episode3',
+                            title: '第3話 (Episode 3)',
+                            pages: [
+                                { page_number: 23, image_url: 'i_023.jpg' }, // page_number を連番に変更
+                                { page_number: 24, image_url: 'i_024.jpg' },
+                                { page_number: 25, image_url: 'i_025.jpg' },
+                                { page_number: 26, image_url: 'i_026.jpg' },
+                                { page_number: 27, image_url: 'i_027.jpg' },
+                                { page_number: 28, image_url: 'i_028.jpg' },
+                                { page_number: 29, image_url: 'i_029.jpg' },
+                                { page_number: 30, image_url: 'i_030.jpg' },
+                                { page_number: 31, image_url: 'i_031.jpg' }
+                            ]
+                        },
+                        {
+                            id: 'episode4',
+                            title: '第4話 (Episode 4)',
+                            pages: [
+                                { page_number: 32, image_url: 'i_032.jpg' }, // page_number を連番に変更
+                                { page_number: 33, image_url: 'i_033.jpg' },
+                                { page_number: 34, image_url: 'i_034.jpg' },
+                                { page_number: 35, image_url: 'i_035.jpg' },
+                                { page_number: 36, image_url: 'i_036.jpg' },
+                                { page_number: 37, image_url: 'i_037.jpg' },
+                                { page_number: 38, image_url: 'i_038.jpg' },
+                                { page_number: 39, image_url: 'i_039.jpg' },
+                                { page_number: 40, image_url: 'i_040.jpg' }
+                            ]
+                        },
+                        {
+                            id: 'episode5',
+                            title: '第5話 (Episode 5)',
+                            pages: [
+                                { page_number: 41, image_url: 'i_041.jpg' }, // page_number を連番に変更
+                                { page_number: 42, image_url: 'i_042.jpg' },
+                                { page_number: 43, image_url: 'i_043.jpg' },
+                                { page_number: 44, image_url: 'i_044.jpg' },
+                                { page_number: 45, image_url: 'i_045.jpg' },
+                                { page_number: 46, image_url: 'i_046.jpg' },
+                                { page_number: 47, image_url: 'i_047.jpg' },
+                                { page_number: 48, image_url: 'i_048.jpg' }
+                            ]
+                        }
                     ],
                     currentEpisodeIndex: 0, // Start with the first episode
                     reading_direction: 'rtl' // Explicitly set reading direction
