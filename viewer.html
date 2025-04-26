@@ -1,1473 +1,225 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Commercial Manga Viewer</title>
-    <style>
-        /* --- CSS (変更なし) --- */
-        :root {
-            --primary-color: #4a6cf7;
-            --secondary-color: #ff6b6b;
-            /* Simplified: Defaulting to light theme variables */
-            --background-color: #ffffff;
-            --text-color: #333333;
-            --overlay-background: rgba(0, 0, 0, 0.7);
-            --overlay-text: #ffffff;
-            --button-background: rgba(255, 255, 255, 0.2);
-            --button-hover: rgba(255, 255, 255, 0.4);
-            --slider-track: rgba(255, 255, 255, 0.3);
-            --slider-thumb: #ffffff;
-            --spinner-color: #ffffff;
-            --error-color: #ff4d4d;
-        }
-
-        /* Optional: Keep dark theme styles if system preference detection is desired, */
-        /* but remove the manual switching buttons/logic */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --background-color: #121212;
-                --text-color: #f1f1f1;
-                --overlay-background: rgba(0, 0, 0, 0.8);
-            }
-        }
-
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            position: fixed;
-            touch-action: manipulation; /* Avoids zoom on double tap, etc. */
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-        }
-
-        #viewer-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            overflow: hidden;
-            background-color: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: grab;
-        }
-
-        #viewer-container:active {
-            cursor: grabbing;
-        }
-
-        #zoom-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transform-origin: center;
-            /* 動的な変更時のみトランジションを適用する（JSで制御） */
-            transition: none;
-            /* ハードウェアアクセラレーションを有効化 */
-            transform: translate3d(0, 0, 0);
-            will-change: transform;
-        }
-
-        #manga-page-container {
-            position: relative;
-            height: 100%;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-        }
-
-        .manga-page {
-            display: block;
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            /* Default fit mode */
-            transform-origin: center;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            flex-shrink: 0;
-            background-color: transparent; /* Use transparent bg by default */
-            /* ハードウェアアクセラレーションを有効化 */
-            transform: translateZ(0);
-            will-change: transform, opacity;
-        }
-
-        /* Navigation zones */
-        .nav-zone {
-            position: absolute;
-            height: 100%;
-            width: 30%;
-            top: 0;
-            z-index: 10;
-            /* background-color: rgba(255,0,0,0.1); */ /* For debugging */
-        }
-
-        #prev-zone {
-            left: 0;
-            cursor: pointer;
-        }
-
-        #next-zone {
-            right: 0;
-            cursor: pointer;
-        }
-
-        #center-zone {
-            left: 30%;
-            width: 40%;
-            cursor: pointer;
-            /* background-color: rgba(0,255,0,0.1); */ /* For debugging */
-        }
-
-        /* UI Overlays */
-        .ui-overlay {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            padding: 15px;
-            color: var(--overlay-text);
-            background-color: var(--overlay-background);
-            z-index: 20;
-            transition: transform 0.3s ease, opacity 0.3s ease;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            pointer-events: none;
-            /* ハードウェアアクセラレーションを有効化 */
-            transform: translate3d(0, 0, 0);
-            will-change: transform, opacity;
-            opacity: 0; /* Start hidden */
-        }
-
-        .ui-overlay>* {
-            pointer-events: auto;
-        }
-
-        #top-overlay {
-            top: 0;
-            transform: translateY(-100%);
-        }
-
-        #bottom-overlay {
-            bottom: 0;
-            transform: translateY(100%);
-        }
-
-        #viewer-container.show-ui .ui-overlay { /* Target overlays inside show-ui container */
-            transform: translateY(0);
-            opacity: 1;
-        }
-
-        /* Buttons and controls */
-        .ui-button {
-            background-color: var(--button-background);
-            border: none;
-            color: var(--overlay-text);
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            flex-shrink: 0;
-            padding: 0; /* Ensure no extra padding */
-        }
-
-        .ui-button:hover,
-        .ui-button:active {
-            background-color: var(--button-hover);
-        }
-
-        .ui-button:disabled {
-            opacity: 0.5;
-            cursor: default;
-            background-color: var(--button-background);
-            /* Prevent hover effect */
-        }
-
-
-        .ui-button svg {
-            width: 24px;
-            height: 24px;
-            fill: currentColor;
-        }
-
-        /* Page slider */
-        #page-slider-container {
-            flex-grow: 1;
-            margin: 0 15px;
-            display: flex;
-            align-items: center;
-        }
-
-        #page-slider {
-            width: 100%;
-            height: 8px;
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            background: var(--slider-track);
-            border-radius: 4px;
-            outline: none;
-        }
-
-        #page-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: var(--slider-thumb);
-            cursor: pointer;
-        }
-
-        #page-slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: var(--slider-thumb);
-            cursor: pointer;
-            border: none;
-        }
-
-        /* Loading spinner */
-        #loading-spinner {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: var(--spinner-color);
-            animation: spin 1s ease-in-out infinite;
-            z-index: 40;
-            display: none; /* Initially hidden */
-            transform: translate(-50%, -50%); /* Ensure centering */
-        }
-
-        @keyframes spin {
-            from {
-                transform: translate(-50%, -50%) rotate(0deg);
-            }
-
-            to {
-                transform: translate(-50%, -50%) rotate(360deg);
-            }
-        }
-
-        /* Error message */
-        #error-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: var(--error-color);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 5px;
-            max-width: 80%;
-            text-align: center;
-            z-index: 40;
-            display: none; /* Initially hidden */
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        #retry-button {
-            margin-top: 15px;
-            padding: 8px 15px;
-            background-color: white;
-            color: var(--error-color);
-            border: none;
-            border-radius: 5px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        #retry-button:hover {
-            background-color: #eee;
-        }
-
-        /* Episode Overlay */
-        #episode-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--overlay-background);
-            z-index: 50;
-            display: none; /* Changed from flex to none */
-            justify-content: center;
-            align-items: center;
-            opacity: 0; /* Add opacity for transition */
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-        }
-
-        #episode-overlay.active {
-            display: flex;
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-content {
-            width: 80%;
-            max-width: 500px;
-            background-color: var(--background-color);
-            color: var(--text-color); /* Ensure text color contrasts */
-            border-radius: 8px;
-            padding: 20px;
-            max-height: 80vh;
-            overflow-y: auto;
-            transform: scale(0.95); /* Add subtle scale effect */
-            opacity: 0;
-            transition: transform 0.3s ease, opacity 0.3s ease;
-        }
-
-        #episode-overlay.active .modal-content {
-            transform: scale(1);
-            opacity: 1;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.2); /* Add separator */
-            padding-bottom: 10px;
-        }
-        .modal-header h2 {
-             margin: 0; /* Remove default margin */
-        }
-
-
-        #episode-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .episode-item {
-            padding: 12px;
-            background-color: rgba(128, 128, 128, 0.1);
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .episode-item:hover {
-            background-color: rgba(128, 128, 128, 0.2);
-        }
-
-        .episode-item.current {
-            border-left: 3px solid var(--primary-color);
-            font-weight: bold;
-            background-color: rgba(128, 128, 128, 0.15); /* Slightly different background */
-        }
-
-        #close-episode-btn { /* Style close button */
-           background: none;
-           border: none;
-           font-size: 24px;
-           line-height: 1;
-           color: var(--text-color);
-           opacity: 0.7;
-           width: auto; /* Override default button size */
-           height: auto;
-        }
-         #close-episode-btn:hover {
-           opacity: 1;
-           background: none; /* Override hover */
-         }
-
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+<title>Commercial Manga Viewer – Optimized</title>
+<style>
+/*===========================  THEME  ===========================*/
+:root{
+  --primary-color:#4a6cf7;
+  --secondary-color:#ff6b6b;
+  --background-color:#fff;
+  --text-color:#333;
+  --overlay-bg:rgba(0,0,0,.7);
+  --overlay-text:#fff;
+  --btn-bg:rgba(255,255,255,.2);
+  --btn-hover:rgba(255,255,255,.35);
+  --slider-track:rgba(255,255,255,.3);
+  --slider-thumb:#fff;
+  --spinner:#fff;
+  --error:#ff4d4d;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --background-color:#121212;
+    --text-color:#f1f1f1;
+    --overlay-bg:rgba(0,0,0,.8)
+  }
+}
+/*===========================  RESET  ===========================*/
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;width:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--background-color);color:var(--text-color);overflow:hidden;user-select:none;touch-action:manipulation;position:fixed}
+/*===========================  STRUCTURE  ===========================*/
+#viewer{display:flex;justify-content:center;align-items:center;position:relative;height:100%;width:100%;background:#000;cursor:grab}
+#viewer:active{cursor:grabbing}
+#zoom{height:100%;width:100%;position:absolute;display:flex;justify-content:center;align-items:center;transform-origin:center;transform:translate3d(0,0,0);will-change:transform}
+.animating{will-change:transform}
+#page-wrap{position:relative;width:100%;height:100%;display:flex;justify-content:center;align-items:center;overflow:hidden}
+.manga-page{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;transition:opacity .3s ease;background:transparent}
+/*===========================  NAV ZONES  ===========================*/
+.nav{position:absolute;top:0;height:100%;width:30%;z-index:10}
+#prev-zone{left:0}
+#center-zone{left:30%;width:40%}
+#next-zone{right:0}
+/*===========================  UI OVERLAY  ===========================*/
+.overlay{position:absolute;left:0;width:100%;padding:15px;display:flex;justify-content:space-between;align-items:center;background:var(--overlay-bg);color:var(--overlay-text);z-index:20;opacity:0;transform:translateY(-100%);transition:transform .3s ease,opacity .3s ease;pointer-events:none}
+.overlay>*{pointer-events:auto}
+#bottom{bottom:0;top:auto;transform:translateY(100%)}
+#viewer.show-ui #top,#viewer.show-ui #bottom{opacity:1;transform:translateY(0)}
+/*===========================  BUTTONS  ===========================*/
+.btn{background:var(--btn-bg);border:none;width:40px;height:40px;border-radius:50%;display:flex;justify-content:center;align-items:center;cursor:pointer;transition:background .2s ease;flex-shrink:0;padding:0;color:var(--overlay-text)}
+.btn:hover,.btn:active{background:var(--btn-hover)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn svg{width:24px;height:24px;fill:currentColor}
+/*===========================  SLIDER  ===========================*/
+#slider-wrap{flex:1;margin:0 15px;display:flex;align-items:center}
+#page-slider{width:100%;height:8px;appearance:none;background:var(--slider-track);border-radius:4px;outline:0;cursor:pointer}
+#page-slider::-webkit-slider-thumb,#page-slider::-moz-range-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--slider-thumb);cursor:pointer;border:none}
+/*===========================  SPINNER & ERROR  ===========================*/
+#spinner{position:absolute;top:50%;left:50%;width:50px;height:50px;border:4px solid rgba(255,255,255,.3);border-top-color:var(--spinner);border-radius:50%;animation:spin 1s linear infinite;transform:translate(-50%,-50%);z-index:40;display:none}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+#error{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--error);color:#fff;padding:15px 20px;border-radius:5px;max-width:80%;text-align:center;z-index:40;display:none;box-shadow:0 4px 10px rgba(0,0,0,.3)}
+#error button{margin-top:10px;padding:8px 15px;background:#fff;color:var(--error);border:none;border-radius:5px;font-weight:700;cursor:pointer}
+/*===========================  EPISODE MODAL  ===========================*/
+#modal{position:absolute;inset:0;background:var(--overlay-bg);display:none;justify-content:center;align-items:center;z-index:50;opacity:0;transition:opacity .3s ease}
+#modal.active{display:flex;opacity:1}
+.modal-box{width:80%;max-width:500px;max-height:80vh;overflow-y:auto;background:var(--background-color);color:var(--text-color);border-radius:8px;padding:20px;transform:scale(.95);opacity:0;transition:transform .3s ease,opacity .3s ease}
+#modal.active .modal-box{transform:scale(1);opacity:1}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;border-bottom:1px solid rgba(128,128,128,.2);padding-bottom:10px}
+.ep-item{padding:12px;background:rgba(128,128,128,.1);border-radius:5px;cursor:pointer;transition:background .2s}
+.ep-item:hover{background:rgba(128,128,128,.2)}
+.ep-item.current{border-left:3px solid var(--primary-color);font-weight:700;background:rgba(128,128,128,.15)}
+</style>
 </head>
-
 <body>
-    <!-- Start with UI hidden, show after load -->
-    <div id="viewer-container">
-        <!-- Zoom container -->
-        <div id="zoom-container">
-            <!-- Manga page container (Simplified: Only one page element needed) -->
-            <div id="manga-page-container">
-                <!-- Set initial src to avoid broken image, or use placeholder -->
-                <img alt="Manga page" class="manga-page" id="current-page" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"> <!-- Transparent 1x1 GIF -->
-            </div>
-        </div>
-
-        <!-- Navigation zones -->
-        <div class="nav-zone" id="prev-zone" aria-label="Previous Page"></div>
-        <div class="nav-zone" id="center-zone" aria-label="Toggle UI"></div>
-        <div class="nav-zone" id="next-zone" aria-label="Next Page"></div>
-
-        <!-- Top UI overlay -->
-        <div class="ui-overlay" id="top-overlay">
-            <div id="content-title">Loading...</div>
-            <div id="page-number"> - / - </div>
-        </div>
-
-        <!-- Bottom UI overlay -->
-        <div class="ui-overlay" id="bottom-overlay">
-            <button class="ui-button" id="prev-button" aria-label="Previous Page" disabled> <!-- Start disabled -->
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M15.41,16.59L10.83,12l4.58-4.59L14,6l-6,6l6,6L15.41,16.59z"></path>
-                </svg>
-            </button>
-
-            <div id="page-slider-container">
-                <input type="range" min="1" max="1" value="1" id="page-slider" aria-label="Page Slider" disabled> <!-- Start disabled -->
-            </div>
-
-            <button class="ui-button" id="next-button" aria-label="Next Page" disabled> <!-- Start disabled -->
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6l6,6l-6,6L8.59,16.59z"></path>
-                </svg>
-            </button>
-
-            <button class="ui-button" id="fullscreen-button" aria-label="Toggle Fullscreen">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path id="fullscreen-enter-icon"
-                        d="M7,14H5v5h5v-2H7V14z M5,10h2V7h3V5H5V10z M17,17h-3v2h5v-5h-2V17z M14,5v2h3v3h2V5H14z"></path>
-                    <path id="fullscreen-exit-icon"
-                        d="M5,16h3v3h2v-5H5V16z M8,5H5v5h2V7h3V5z M14,19h2v-3h3v-2h-5V19z M16,8h3V5h-2v3h-3V8z"
-                        style="display: none;"></path>
-                </svg>
-            </button>
-
-            <div id="episode-navigation">
-                <button class="ui-button" id="episode-btn" aria-label="エピソード選択" disabled> <!-- Start disabled -->
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                            d="M3,13h2v-2H3V13z M3,17h2v-2H3V17z M3,9h2V7H3V9z M7,13h14v-2H7V13z M7,17h14v-2H7V17z M7,7v2h14V7H7z">
-                        </path>
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-         <!-- Episode Selection Modal -->
-        <div id="episode-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="episode-modal-title">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 id="episode-modal-title">エピソード選択</h2>
-                    <button id="close-episode-btn" class="ui-button" aria-label="閉じる">×</button>
-                </div>
-                <div id="episode-list">
-                    <!-- Episode items will be populated here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading spinner -->
-        <div id="loading-spinner" aria-label="Loading" role="status"></div>
-
-        <!-- Error message -->
-        <div id="error-message" role="alert">
-            <div id="error-text">読み込みに失敗しました。</div>
-            <button id="retry-button">再試行</button>
-        </div>
+<div id="viewer">
+  <div id="zoom" class="animating">
+    <div id="page-wrap"><img id="page" class="manga-page" alt="manga" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /></div>
+  </div>
+  <div class="nav" id="prev-zone"></div>
+  <div class="nav" id="center-zone"></div>
+  <div class="nav" id="next-zone"></div>
+  <div class="overlay" id="top"><div id="title">Loading…</div><div id="counter">-/-</div></div>
+  <div class="overlay" id="bottom">
+    <button class="btn" id="prev-btn" aria-label="Prev" disabled><svg viewBox="0 0 24 24"><path d="M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6z"/></svg></button>
+    <div id="slider-wrap"><input type="range" id="page-slider" min="1" max="1" value="1" disabled /></div>
+    <button class="btn" id="next-btn" aria-label="Next" disabled><svg viewBox="0 0 24 24"><path d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></button>
+    <button class="btn" id="fs-btn" aria-label="FS"><svg viewBox="0 0 24 24"><path id="fs-in" d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"/><path id="fs-out" d="M5 16h3v3h2v-5H5zm3-11H5v5h2V7h3V5zm6 15h2v-3h3v-2h-5zm2-7h3V5h-2v3h-3z" style="display:none"/></svg></button>
+    <button class="btn" id="ep-btn" aria-label="Episodes" disabled><svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3zm0 4h2v-2H3zm0-8h2V7H3zm4 4h14v-2H7zm0 4h14v-2H7zm0-10v2h14V7z"/></svg></button>
+  </div>
+  <div id="spinner"></div>
+  <div id="error"><span id="err-text"></span><br><button id="retry">再試行</button></div>
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-box">
+      <div class="modal-header"><h2 id="modal-title">エピソード選択</h2><button class="btn" id="modal-close" aria-label="閉じる">×</button></div>
+      <div id="ep-list"></div>
     </div>
-
-    <script>
-        // Main viewer class
-        class MangaViewer {
-            constructor() {
-                // DOM elements
-                this.viewerContainer = this.getElement('viewer-container');
-                this.zoomContainer = this.getElement('zoom-container');
-                this.pageContainer = this.getElement('manga-page-container');
-                this.currentPage = this.getElement('current-page');
-                this.topOverlay = this.getElement('top-overlay');
-                this.bottomOverlay = this.getElement('bottom-overlay');
-                this.pageSlider = this.getElement('page-slider');
-                this.pageNumber = this.getElement('page-number');
-                this.contentTitle = this.getElement('content-title');
-                this.loadingSpinner = this.getElement('loading-spinner');
-                this.errorMessage = this.getElement('error-message');
-                this.errorText = this.getElement('error-text');
-                this.retryButton = this.getElement('retry-button');
-                this.episodeOverlay = this.getElement('episode-overlay');
-                this.episodeList = this.getElement('episode-list');
-                this.closeEpisodeButton = this.getElement('close-episode-btn');
-
-                // Navigation zones
-                this.prevZone = this.getElement('prev-zone');
-                this.nextZone = this.getElement('next-zone');
-                this.centerZone = this.getElement('center-zone');
-
-                // Buttons
-                this.prevButton = this.getElement('prev-button');
-                this.nextButton = this.getElement('next-button');
-                this.fullscreenButton = this.getElement('fullscreen-button');
-                this.fullscreenEnterIcon = this.getElement('fullscreen-enter-icon');
-                this.fullscreenExitIcon = this.getElement('fullscreen-exit-icon');
-                this.episodeButton = this.getElement('episode-btn');
-
-                // State variables
-                this.currentPageIndex = 0;
-                this.totalPages = 0;
-                this.allPages = [];
-                this.episodeStructure = []; // To store episode info
-                this.mangaData = null; // Store fetched data
-                this.readingDirection = 'rtl'; // Default
-                this.isUIVisible = false; // Start hidden
-                this.uiHideTimeout = null;
-                this.isLoading = false;
-                this.isInitialized = false;
-
-                // Touch handling variables
-                this.touchStartX = 0;
-                this.touchStartY = 0;
-                this.panStartX = 0;
-                this.panStartY = 0;
-                this.lastTapTime = 0;
-
-                // Zoom variables
-                this.scale = 1;
-                this.translateX = 0;
-                this.translateY = 0;
-                this.initialDistance = 0;
-                this.isZooming = false;
-                this.isPanning = false;
-                this.pinchCenterX = 0;
-                this.pinchCenterY = 0;
-                this.initialScale = 1;
-
-
-                // --- Mock Manga Data --- (Keep for standalone testing)
-                 this.mockMangaData = {
-                     id: 'manga123',
-                     title: 'KARMA',
-                     frontMatter: [
-                         { page_number: 1, image_url: 'i_001.jpg', type: 'cover' },
-                         { page_number: 2, image_url: 'i_002.jpg', type: 'contents' }
-                     ],
-                     episodes: [
-                         { id: 'episode1', title: '第1話', pages: [{ page_number: 3, image_url: 'i_003.jpg' }, { page_number: 4, image_url: 'i_004.jpg' }, { page_number: 5, image_url: 'i_005.jpg' }, { page_number: 6, image_url: 'i_006.jpg' }, { page_number: 7, image_url: 'i_007.jpg' }, { page_number: 8, image_url: 'i_008.jpg' }, { page_number: 9, image_url: 'i_009.jpg' }, { page_number: 10, image_url: 'i_010.jpg' }, { page_number: 11, image_url: 'i_011.jpg' }, { page_number: 12, image_url: 'i_012.jpg' }, { page_number: 13, image_url: 'i_013.jpg' }] },
-                         { id: 'episode2', title: '第2話', pages: [{ page_number: 14, image_url: 'i_014.jpg' }, { page_number: 15, image_url: 'i_015.jpg' }, { page_number: 16, image_url: 'i_016.jpg' }, { page_number: 17, image_url: 'i_017.jpg' }, { page_number: 18, image_url: 'i_018.jpg' }, { page_number: 19, image_url: 'i_019.jpg' }, { page_number: 20, image_url: 'i_020.jpg' }, { page_number: 21, image_url: 'i_021.jpg' }, { page_number: 22, image_url: 'i_022.jpg' }] },
-                         { id: 'episode3', title: '第3話', pages: [{ page_number: 23, image_url: 'i_023.jpg' }, { page_number: 24, image_url: 'i_024.jpg' }, { page_number: 25, image_url: 'i_025.jpg' }, { page_number: 26, image_url: 'i_026.jpg' }, { page_number: 27, image_url: 'i_027.jpg' }, { page_number: 28, image_url: 'i_028.jpg' }, { page_number: 29, image_url: 'i_029.jpg' }, { page_number: 30, image_url: 'i_030.jpg' }, { page_number: 31, image_url: 'i_031.jpg' }] },
-                         { id: 'episode4', title: '第4話', pages: [{ page_number: 32, image_url: 'i_032.jpg' }, { page_number: 33, image_url: 'i_033.jpg' }, { page_number: 34, image_url: 'i_034.jpg' }, { page_number: 35, image_url: 'i_035.jpg' }, { page_number: 36, image_url: 'i_036.jpg' }, { page_number: 37, image_url: 'i_037.jpg' }, { page_number: 38, image_url: 'i_038.jpg' }, { page_number: 39, image_url: 'i_039.jpg' }, { page_number: 40, image_url: 'i_040.jpg' }] },
-                         { id: 'episode5', title: '第5話', pages: [{ page_number: 41, image_url: 'i_041.jpg' }, { page_number: 42, image_url: 'i_042.jpg' }, { page_number: 43, image_url: 'i_043.jpg' }, { page_number: 44, image_url: 'i_044.jpg' }, { page_number: 45, image_url: 'i_045.jpg' }, { page_number: 46, image_url: 'i_046.jpg' }, { page_number: 47, image_url: 'i_047.jpg' }, { page_number: 48, image_url: 'i_048.jpg' }] }
-                     ],
-                     reading_direction: 'rtl'
-                 };
-                // --- End Mock Data ---
-
-                if (!this.viewerContainer || !this.currentPage) {
-                    console.error("初期化エラー: 必須のDOM要素が見つかりません。");
-                    this.showError("ビューアの初期化に失敗しました。ページをリロードしてください。");
-                    return;
-                }
-
-                this.init();
-            }
-
-            getElement(id) {
-                const element = document.getElementById(id);
-                if (!element) {
-                    // 初期化時に必須要素がない場合はエラーをスローする方が良いかも
-                    console.warn(`Element with ID '${id}' not found.`);
-                }
-                return element;
-            }
-
-            init() {
-                this.setupEventListeners();
-                this.resetZoom(); // Ensure initial state
-                this.loadMangaData(); // Load data async
-                // UI is initially hidden by CSS, show it after first load or always
-                // this.scheduleUiHide(); // Don't auto-hide immediately
-                this.updateFullscreenIcon(); // Set initial icon state
-            }
-
-            async fetchMangaData() {
-                // In a real app, fetch from an API endpoint
-                // Example:
-                // const response = await fetch('/api/manga/' + mangaId);
-                // if (!response.ok) throw new Error('Failed to fetch');
-                // return await response.json();
-
-                // --- Using Mock Data Simulation ---
-                this.loadingSpinner.style.display = 'block';
-                this.errorMessage.style.display = 'none';
-                this.isLoading = true;
-                console.log("Fetching manga data (simulated)...");
-
-                return new Promise((resolve, reject) => {
-                    setTimeout(() => {
-                        try {
-                            // Simulate potential API error
-                            // if (Math.random() > 0.8) throw new Error("Simulated network error");
-                            console.log("Data fetched (simulated)");
-                            this.isLoading = false;
-                            resolve(this.mockMangaData); // Use mock data
-                        } catch (error) {
-                            console.error("Error fetching manga data:", error);
-                            this.isLoading = false;
-                            reject(error);
-                        }
-                    }, 500); // Simulate network delay
-                });
-                 // --- End Mock Data Simulation ---
-            }
-
-
-            async loadMangaData() {
-                if (this.isLoading) return;
-
-                try {
-                    const data = await this.fetchMangaData();
-                    this.mangaData = data; // Store the data
-
-                    this.contentTitle.textContent = data.title || 'Manga Viewer';
-                    this.readingDirection = data.reading_direction || 'rtl';
-
-                    // Process episodes and pages
-                    this.episodeStructure = [];
-                    let combinedPages = [];
-                    let pageCount = 0;
-
-                    if (data.frontMatter && data.frontMatter.length > 0) {
-                        this.episodeStructure.push({
-                            id: 'frontmatter',
-                            title: '表紙・目次',
-                            startPage: 0,
-                            endPage: data.frontMatter.length - 1,
-                            totalPages: data.frontMatter.length
-                        });
-                        combinedPages = combinedPages.concat(data.frontMatter);
-                        pageCount += data.frontMatter.length;
-                    }
-
-                    if (data.episodes && data.episodes.length > 0) {
-                        data.episodes.forEach((episode, index) => {
-                            if (episode.pages && episode.pages.length > 0) {
-                                this.episodeStructure.push({
-                                    id: episode.id || `episode${index + 1}`,
-                                    title: episode.title || `第${index + 1}話`,
-                                    startPage: pageCount,
-                                    endPage: pageCount + episode.pages.length - 1,
-                                    totalPages: episode.pages.length
-                                });
-                                combinedPages = combinedPages.concat(episode.pages);
-                                pageCount += episode.pages.length;
-                            }
-                        });
-                    }
-
-                    this.allPages = combinedPages;
-                    this.totalPages = this.allPages.length;
-
-                    if (this.totalPages === 0) {
-                        throw new Error("表示できるページがありません。");
-                    }
-
-                    // Enable UI controls now that we have pages
-                    this.pageSlider.max = this.totalPages;
-                    this.pageSlider.min = 1;
-                    this.pageSlider.disabled = false;
-                    this.episodeButton.disabled = false;
-
-
-                    this.loadBookmark(); // Load bookmark BEFORE loading the first page
-
-                    // Load the initial page determined by bookmark or default
-                    await this.loadPage(this.currentPageIndex); // Wait for first page load
-                    this.updatePageNumber(); // Update UI elements
-
-                    this.isInitialized = true;
-                    this.loadingSpinner.style.display = 'none';
-                    this.showUI(); // Show UI after initial load
-
-                } catch (error) {
-                    console.error("Error processing manga data:", error);
-                    this.showError(`データの読み込みまたは処理に失敗しました: ${error.message}`);
-                    this.loadingSpinner.style.display = 'none';
-                    // Disable controls on error
-                    this.pageSlider.disabled = true;
-                    this.episodeButton.disabled = true;
-                }
-            }
-
-
-            setupEventListeners() {
-                 // Use event delegation where possible
-                 this.bottomOverlay.addEventListener('click', (e) => {
-                    if (!this.isInitialized) return; // Prevent actions before init
-                    const target = e.target.closest('.ui-button');
-                    if (!target || target.disabled) return;
-
-                    if (target.id === 'prev-button') this.prevPage();
-                    else if (target.id === 'next-button') this.nextPage();
-                    else if (target.id === 'fullscreen-button') this.toggleFullscreen();
-                    else if (target.id === 'episode-btn') this.showEpisodeList();
-                });
-
-                // Navigation zones (Click/Tap)
-                this.prevZone.addEventListener('click', (e) => { if (this.isInitialized) this.prevPage(); });
-                this.nextZone.addEventListener('click', (e) => { if (this.isInitialized) this.nextPage(); });
-                this.centerZone.addEventListener('click', (e) => { if (this.isInitialized) this.toggleUI(); });
-
-
-                // Slider
-                this.pageSlider.addEventListener('input', this.onSliderInput.bind(this));
-                this.pageSlider.addEventListener('change', this.onSliderChange.bind(this));
-
-                // Retry button
-                this.retryButton.addEventListener('click', this.retryLoad.bind(this));
-
-                // Episode modal close button
-                 this.closeEpisodeButton.addEventListener('click', this.hideEpisodeList.bind(this));
-                 // Close modal if clicking outside the content
-                 this.episodeOverlay.addEventListener('click', (e) => {
-                     if (e.target === this.episodeOverlay) { // Clicked on the backdrop
-                         this.hideEpisodeList();
-                     }
-                 });
-
-
-                // Touch events - Passive where possible
-                const touchOptions = { passive: true };
-                // Use pointer events for broader compatibility (touch, mouse, pen)
-                this.viewerContainer.addEventListener('pointerdown', this.handlePointerDown.bind(this));
-                this.viewerContainer.addEventListener('pointermove', this.handlePointerMove.bind(this), { passive: false }); // Need preventDefault for panning/zooming
-                this.viewerContainer.addEventListener('pointerup', this.handlePointerEnd.bind(this));
-                this.viewerContainer.addEventListener('pointercancel', this.handlePointerCancel.bind(this));
-
-
-                // Keyboard navigation
-                document.addEventListener('keydown', this.handleKeyDown.bind(this));
-
-                // Window resize event
-                window.addEventListener('resize', this.handleResize.bind(this));
-
-                // Fullscreen change event
-                document.addEventListener('fullscreenchange', this.updateFullscreenIcon.bind(this));
-                document.addEventListener('webkitfullscreenchange', this.updateFullscreenIcon.bind(this)); // Safari/iOS
-            }
-
-
-            // --- UI Visibility ---
-            showUI(autoHide = true) {
-                if (!this.isInitialized) return; // Don't show UI before load
-                this.viewerContainer.classList.add('show-ui');
-                this.isUIVisible = true;
-                this.clearUiHideTimeout();
-
-                if (autoHide) {
-                    this.scheduleUiHide();
-                }
-            }
-
-            hideUI() {
-                // Don't hide if episode list is active
-                if (this.episodeOverlay.classList.contains('active')) return;
-                this.viewerContainer.classList.remove('show-ui');
-                this.isUIVisible = false;
-                this.clearUiHideTimeout();
-            }
-
-             toggleUI(forceShow = false) {
-                 if (forceShow) {
-                     this.showUI();
-                 } else if (this.isUIVisible) {
-                     this.hideUI();
-                 } else {
-                     this.showUI();
-                 }
-            }
-
-
-            scheduleUiHide() {
-                this.clearUiHideTimeout();
-                this.uiHideTimeout = setTimeout(() => {
-                    this.hideUI();
-                }, 3000); // 3 seconds
-            }
-
-            clearUiHideTimeout() {
-                if (this.uiHideTimeout) {
-                    clearTimeout(this.uiHideTimeout);
-                    this.uiHideTimeout = null;
-                }
-            }
-
-             // --- Episode List ---
-            showEpisodeList() {
-                if (!this.episodeStructure || this.episodeStructure.length === 0) return;
-
-                this.episodeList.innerHTML = ''; // Clear previous items
-
-                this.episodeStructure.forEach(episode => {
-                    const episodeItem = document.createElement('div');
-                    episodeItem.className = 'episode-item';
-                    episodeItem.textContent = episode.title;
-                    episodeItem.dataset.startPage = episode.startPage; // Store start page index
-
-                    // Highlight current episode
-                    if (this.currentPageIndex >= episode.startPage && this.currentPageIndex <= episode.endPage) {
-                        episodeItem.classList.add('current');
-                        episodeItem.setAttribute('aria-current', 'true');
-                    }
-
-                    episodeItem.addEventListener('click', () => {
-                        const targetPage = parseInt(episodeItem.dataset.startPage, 10);
-                        this.goToPage(targetPage);
-                        this.hideEpisodeList();
-                    });
-
-                    this.episodeList.appendChild(episodeItem);
-                });
-
-                this.episodeOverlay.classList.add('active');
-                this.clearUiHideTimeout(); // Prevent UI from hiding while modal is open
-                 // Focus the first item or the close button for accessibility
-                 this.closeEpisodeButton.focus();
-            }
-
-             hideEpisodeList() {
-                this.episodeOverlay.classList.remove('active');
-                this.scheduleUiHide(); // Resume auto-hide schedule
-            }
-
-
-            // --- Fullscreen ---
-            toggleFullscreen() {
-                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                    const element = document.documentElement; // Request fullscreen on the whole page
-                    if (element.requestFullscreen) element.requestFullscreen();
-                    else if (element.webkitRequestFullscreen) element.webkitRequestFullscreen(); // Safari
-                } else {
-                    if (document.exitFullscreen) document.exitFullscreen();
-                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); // Safari
-                }
-            }
-
-            updateFullscreenIcon() {
-                const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                 if (this.fullscreenEnterIcon && this.fullscreenExitIcon) {
-                    this.fullscreenEnterIcon.style.display = isFullscreen ? 'none' : 'block';
-                    this.fullscreenExitIcon.style.display = isFullscreen ? 'block' : 'none';
-                    this.fullscreenButton.setAttribute('aria-label', isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen');
-                }
-            }
-
-            // --- Page Navigation ---
-            updatePageNumber() {
-                if (this.totalPages === 0) {
-                    this.pageNumber.textContent = "- / -";
-                    this.pageSlider.value = 1;
-                    this.pageSlider.max = 1;
-                    this.prevButton.disabled = true;
-                    this.nextButton.disabled = true;
-                    this.prevZone.style.pointerEvents = 'none';
-                    this.nextZone.style.pointerEvents = 'none';
-                    return;
-                }
-
-                const displayedPage = this.currentPageIndex + 1;
-                const pageNumberText = `${displayedPage} / ${this.totalPages}`;
-                const isFirstPage = this.currentPageIndex === 0;
-                const isLastPage = this.currentPageIndex >= this.totalPages - 1;
-
-                // Update UI elements efficiently
-                 requestAnimationFrame(() => {
-                     if (this.pageNumber.textContent !== pageNumberText) {
-                         this.pageNumber.textContent = pageNumberText;
-                     }
-                     if (parseInt(this.pageSlider.value) !== displayedPage) {
-                         this.pageSlider.value = displayedPage;
-                     }
-                    this.prevButton.disabled = isFirstPage;
-                    this.nextButton.disabled = isLastPage;
-                    this.prevZone.style.pointerEvents = isFirstPage ? 'none' : 'auto';
-                    this.nextZone.style.pointerEvents = isLastPage ? 'none' : 'auto';
-                 });
-            }
-
-
-            prevPage() {
-                // In RTL, prev button/zone goes to higher index (visually next page)
-                if (this.readingDirection === 'rtl') {
-                    this.goToPage(this.currentPageIndex - 1);
-                } else {
-                    this.goToPage(this.currentPageIndex - 1);
-                }
-                this.showUI(); // Show UI on interaction
-            }
-
-            nextPage() {
-                // In RTL, next button/zone goes to lower index (visually previous page)
-                 if (this.readingDirection === 'rtl') {
-                     this.goToPage(this.currentPageIndex + 1);
-                 } else {
-                     this.goToPage(this.currentPageIndex + 1);
-                 }
-                this.showUI(); // Show UI on interaction
-            }
-
-
-            goToPage(pageIndex) {
-                 const newIndex = Math.max(0, Math.min(pageIndex, this.totalPages - 1));
-
-                 // Avoid unnecessary loading if already on the target page
-                 if (newIndex === this.currentPageIndex && this.isInitialized && this.currentPage.dataset.imageUrl) {
-                    console.log("Already on page", newIndex + 1);
-                    return;
-                 }
-
-                 // Don't allow navigation while a page is loading to prevent race conditions
-                 if (this.isLoading) {
-                     console.log("Page load in progress, navigation skipped.");
-                     return;
-                 }
-
-                this.currentPageIndex = newIndex;
-                this.resetZoom(); // Reset zoom on page change
-                this.loadPage(this.currentPageIndex); // Async load
-                this.updatePageNumber();
-                this.saveBookmark();
-                this.showUI(); // Keep UI visible briefly after navigation
-            }
-
-            onSliderInput() {
-                 if (!this.isInitialized) return;
-                // Update page number display instantly during slider drag
-                this.pageNumber.textContent = `${this.pageSlider.value} / ${this.totalPages}`;
-                this.showUI(false); // Show UI but don't restart auto-hide timer yet
-                this.clearUiHideTimeout();
-            }
-            onSliderChange() {
-                 if (!this.isInitialized) return;
-                const targetPage = parseInt(this.pageSlider.value) - 1;
-                this.goToPage(targetPage);
-                this.scheduleUiHide(); // Restart auto-hide after slider release
-            }
-
-            retryLoad() {
-                this.errorMessage.style.display = 'none';
-                if (this.mangaData) {
-                    // Retry loading the current page
-                    this.loadPage(this.currentPageIndex);
-                } else {
-                    // Retry loading the initial manga data
-                    this.loadMangaData();
-                }
-            }
-
-            // --- Bookmarking (Using localStorage) ---
-            saveBookmark() {
-                if (!this.mangaData || !this.allPages.length || !this.isInitialized) return;
-                try {
-                    const key = `mangaViewer_${this.mangaData.id}_bookmark`;
-                    localStorage.setItem(key, this.currentPageIndex.toString());
-                    // console.log(`Bookmark saved (localStorage): ${key} = ${this.currentPageIndex}`);
-                } catch (error) {
-                    console.error('Error saving bookmark to localStorage:', error);
-                }
-            }
-
-            loadBookmark() {
-                if (!this.mangaData) {
-                     this.currentPageIndex = 0;
-                     return;
-                 };
-                try {
-                    const key = `mangaViewer_${this.mangaData.id}_bookmark`;
-                    const savedIndexStr = localStorage.getItem(key);
-                    if (savedIndexStr !== null) {
-                        const savedIndex = parseInt(savedIndexStr, 10);
-                        if (!isNaN(savedIndex) && savedIndex >= 0 && savedIndex < this.totalPages) {
-                            console.log(`Bookmark loaded (localStorage): ${key} = ${savedIndex}`);
-                            this.currentPageIndex = savedIndex;
-                             return; // Found valid bookmark
-                        } else {
-                            console.warn(`Invalid bookmark value found: ${savedIndexStr}. Removing.`);
-                            localStorage.removeItem(key); // Clean up invalid data
-                        }
-                    }
-                    // Default to first page if no valid bookmark found
-                    this.currentPageIndex = 0;
-                } catch (error) {
-                    console.error('Error loading bookmark from localStorage:', error);
-                    this.currentPageIndex = 0; // Default on error
-                }
-            }
-
-
-            // --- Page Loading and Preloading ---
-            async loadPage(pageIndex) {
-                if (pageIndex < 0 || pageIndex >= this.totalPages) {
-                    this.showError(`無効なページインデックス: ${pageIndex + 1}`);
-                    return;
-                }
-
-                const pageData = this.allPages[pageIndex];
-                if (!pageData || !pageData.image_url) {
-                    this.showError(`ページ ${pageIndex + 1} のデータが見つかりません。`);
-                     return;
-                }
-
-                // Avoid reloading the same image if already displayed
-                if (this.currentPage.dataset.imageUrl === pageData.image_url && !this.errorMessage.style.display) {
-                     console.log("Image already loaded:", pageData.image_url);
-                     this.isLoading = false; // Ensure isLoading is false if we skip
-                     this.loadingSpinner.style.display = 'none'; // Hide spinner if it was somehow visible
-                     return;
-                 }
-
-
-                this.isLoading = true;
-                this.loadingSpinner.style.display = 'block';
-                this.errorMessage.style.display = 'none';
-                // Optional: slightly dim the current image while loading next
-                // this.currentPage.style.opacity = '0.8';
-
-                 try {
-                     await this.loadImageWithPromise(this.currentPage, pageData.image_url);
-                     // Reset opacity after successful load
-                     // this.currentPage.style.opacity = '1';
-                     this.preloadAdjacentPages(pageIndex);
-                 } catch (error) {
-                     this.showError(error.message);
-                     // Keep spinner hidden, error is shown
-                     // this.currentPage.style.opacity = '1'; // Reset opacity on error too
-                 } finally {
-                    this.isLoading = false;
-                    this.loadingSpinner.style.display = 'none';
-                    this.updatePageNumber(); // Ensure buttons are updated after load attempt
-                 }
-            }
-
-             // Modified loadImage function returning a Promise
-             loadImageWithPromise(imgElement, src) {
-                 return new Promise((resolve, reject) => {
-                     if (!imgElement) return reject(new Error("Target image element not found."));
-
-                     const img = new Image();
-                     img.onload = () => {
-                         imgElement.src = src; // Set src only after load complete
-                         imgElement.style.backgroundColor = 'transparent'; // Remove placeholder bg
-                         imgElement.dataset.imageUrl = src; // Store current URL
-                         resolve();
-                     };
-                     img.onerror = (err) => {
-                         console.error(`Error loading image: ${src}`, err);
-                         imgElement.style.backgroundColor = 'var(--error-color)'; // Indicate error visually
-                         // Optionally set a broken image placeholder:
-                         // imgElement.src = "path/to/broken-image.png";
-                         imgElement.dataset.imageUrl = 'error'; // Mark as error state
-                         reject(new Error(`画像 (${src.split('/').pop() || 'ファイル名不明'}) の読み込み失敗`));
-                     };
-
-                     // If the imgElement doesn't have a src yet (initial load), set placeholder bg
-                     if (!imgElement.src || imgElement.src.startsWith('data:')) {
-                         imgElement.style.backgroundColor = '#333';
-                     }
-                     // Else, keep the previous image visible while loading
-
-                     img.src = src; // Start loading
-                 });
-             }
-
-
-            preloadAdjacentPages(currentIndex) {
-                const preloadDepth = 2; // How many pages ahead/behind to preload
-                const pagesToPreload = new Set(); // Use Set to avoid duplicates
-
-                for (let i = 1; i <= preloadDepth; i++) {
-                    // Preload next pages based on reading direction
-                    const nextIndex = (this.readingDirection === 'rtl') ? currentIndex - i : currentIndex + i;
-                    if (nextIndex >= 0 && nextIndex < this.totalPages) {
-                        pagesToPreload.add(nextIndex);
-                    }
-
-                    // Preload previous pages based on reading direction
-                    const prevIndex = (this.readingDirection === 'rtl') ? currentIndex + i : currentIndex - i;
-                     if (prevIndex >= 0 && prevIndex < this.totalPages) {
-                        pagesToPreload.add(prevIndex);
-                    }
-                }
-
-                // console.log("Preloading indices:", Array.from(pagesToPreload));
-
-                pagesToPreload.forEach(index => {
-                    const page = this.allPages[index];
-                    if (page && page.image_url) {
-                        const img = new Image();
-                        // Low priority for preloads might be beneficial if supported
-                        if ('loading' in HTMLImageElement.prototype) {
-                            img.loading = 'lazy'; // Or keep default 'auto'
-                        }
-                        img.src = page.image_url;
-                    }
-                });
-            }
-
-            // Placeholder for more advanced cleanup if needed
-            cleanupUnusedResources() {
-                // console.log("Running cleanup (currently no-op)");
-                // Potential logic: Track loaded Image objects and release far-off ones
-            }
-
-            showError(message) {
-                this.loadingSpinner.style.display = 'none'; // Hide spinner first
-                this.errorText.textContent = message;
-                this.errorMessage.style.display = 'block';
-                this.isLoading = false; // Ensure loading state is reset
-                 // Disable navigation buttons on error? Maybe not, allow retry.
-            }
-
-
-            // --- Pointer Event Handlers (Replacing Touch Events) ---
-            activePointers = new Map(); // Track active pointers
-
-            handlePointerDown(e) {
-                // Ignore non-primary button interactions (e.g., right-click)
-                 if (e.button !== 0) return;
-
-                this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-                // Capture the pointer to ensure we get subsequent events even if it moves off the element
-                e.target.setPointerCapture(e.pointerId);
-
-                this.showUI();
-                this.clearUiHideTimeout();
-
-                 if (this.activePointers.size === 1) { // First pointer down
-                    this.isZooming = false; // Reset zooming flag
-                    this.isPanning = this.scale > 1;
-                    this.touchStartX = e.clientX; // Use generic term, covers mouse/pen too
-                    this.touchStartY = e.clientY;
-                    if (this.isPanning) {
-                        this.panStartX = this.translateX;
-                        this.panStartY = this.translateY;
-                        this.viewerContainer.style.cursor = 'grabbing'; // Update cursor immediately
-                    } else {
-                         this.viewerContainer.style.cursor = 'grab';
-                     }
-                } else if (this.activePointers.size === 2) { // Second pointer down (pinch zoom start)
-                    this.isZooming = true;
-                    this.isPanning = false; // Stop panning when zooming
-                    const pointers = Array.from(this.activePointers.values());
-                    this.initialDistance = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
-                    this.initialScale = this.scale;
-                    // Calculate pinch center relative to the zoom container
-                    const rect = this.zoomContainer.getBoundingClientRect();
-                    this.pinchCenterX = ((pointers[0].x + pointers[1].x) / 2) - rect.left;
-                    this.pinchCenterY = ((pointers[0].y + pointers[1].y) / 2) - rect.top;
-                 }
-            }
-
-            handlePointerMove(e) {
-                 if (!this.activePointers.has(e.pointerId)) return; // Only track captured pointers
-
-                 // Update pointer position
-                 this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-                 if (this.isZooming && this.activePointers.size === 2) {
-                    e.preventDefault(); // Prevent page scroll/etc. during zoom
-                    const pointers = Array.from(this.activePointers.values());
-                    const currentDistance = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
-
-                    if (this.initialDistance > 0) {
-                         const scaleFactor = currentDistance / this.initialDistance;
-                         const newScale = Math.max(1, Math.min(this.initialScale * scaleFactor, 5)); // Max zoom level 5x
-
-                         // Calculate translation adjustment based on pinch center
-                         const deltaScale = newScale - this.scale;
-                         // Translate origin calculation needs careful review - relative to container or content?
-                         // Let's try adjusting based on the pinch center relative to the container dimensions
-                         const originX = (this.pinchCenterX - this.translateX) / this.scale;
-                         const originY = (this.pinchCenterY - this.translateY) / this.scale;
-
-                         this.translateX -= originX * deltaScale;
-                         this.translateY -= originY * deltaScale;
-
-                         this.scale = newScale;
-
-                         this.applyPanBoundaries(); // Apply boundaries after scaling and translating
-                         this.updateZoom(false); // Update transform without transition
-                    }
-                } else if (this.isPanning && this.activePointers.size === 1) {
-                    e.preventDefault(); // Prevent default panning behavior if any
-                    const currentX = e.clientX;
-                    const currentY = e.clientY;
-                    const deltaX = currentX - this.touchStartX;
-                    const deltaY = currentY - this.touchStartY;
-
-                    this.translateX = this.panStartX + deltaX;
-                    this.translateY = this.panStartY + deltaY;
-
-                    this.applyPanBoundaries();
-                    this.updateZoom(false); // Update transform without transition
-                 }
-            }
-
-
-            handlePointerEnd(e) {
-                 if (!this.activePointers.has(e.pointerId)) return;
-
-                 const pointerUpTime = Date.now();
-                 const pointerId = e.pointerId;
-
-                 // Release pointer capture
-                 e.target.releasePointerCapture(pointerId);
-                 this.activePointers.delete(pointerId);
-
-                 const tapLength = pointerUpTime - this.lastTapTime;
-                 let isDoubleTap = false;
-
-                 // --- Double Tap ---
-                 if (this.activePointers.size === 0 && // Was the last pointer lifted?
-                    e.pointerType !== 'mouse' && // Often disable double-tap zoom for mouse
-                    tapLength < 300 && tapLength > 50) { // Timing window for double tap
-
-                     isDoubleTap = true;
-                     const rect = this.viewerContainer.getBoundingClientRect();
-                     const tapX = e.clientX - rect.left;
-                     const tapY = e.clientY - rect.top;
-
-                     if (this.scale <= 1.1) { // If not zoomed in or only slightly
-                         const targetScale = 2; // Zoom factor
-                         // Calculate translation to center the tap point
-                         // Origin is center, so adjust based on tap relative to center
-                         const containerCenterX = this.viewerContainer.clientWidth / 2;
-                         const containerCenterY = this.viewerContainer.clientHeight / 2;
-
-                         // Target translation: move the tapped point to the center
-                         this.translateX = containerCenterX - tapX * targetScale;
-                         this.translateY = containerCenterY - tapY * targetScale;
-                         this.scale = targetScale;
-
-                         console.log("Double tap zoom IN");
-                     } else {
-                         // Zoom out on double tap if already zoomed in
-                         this.resetZoom();
-                         console.log("Double tap zoom OUT");
-                     }
-                     this.applyPanBoundaries();
-                     this.updateZoom(true); // Zoom with transition
-                 }
-                 this.lastTapTime = pointerUpTime; // Update last tap time regardless
-
-
-                 // --- Swipe Detection ---
-                 if (!isDoubleTap && !this.isZooming && this.scale <= 1.1 && this.activePointers.size === 0) {
-                    const touchEndX = e.clientX;
-                    const touchEndY = e.clientY;
-                    const deltaX = touchEndX - this.touchStartX;
-                    const deltaY = touchEndY - this.touchStartY;
-                    const swipeThreshold = 50; // Min horizontal distance for swipe
-                    const verticalThreshold = 75; // Max vertical distance allowed for horizontal swipe
-
-                    if (Math.abs(deltaX) > swipeThreshold && Math.abs(deltaY) < verticalThreshold) {
-                        // Horizontal swipe detected
-                        if (deltaX > 0) { // Swiped right
-                             if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage();
-                         } else { // Swiped left
-                             if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage();
-                         }
-                         // Prevent swipe from also triggering click on zones
-                         // This might need more robust handling if zones overlap swipe end point
-                         // e.preventDefault(); // Careful with this, might prevent intended clicks
-                     }
-                 }
-
-
-                 // --- State Reset ---
-                 if (this.isZooming && this.activePointers.size < 2) {
-                    this.isZooming = false;
-                    // Snap back to 1x if zoom is very small after pinch?
-                    if (this.scale < 1.05) {
-                        this.resetZoom();
-                    }
-                 }
-                 if (this.isPanning && this.activePointers.size === 0) {
-                    this.isPanning = false;
-                    this.viewerContainer.style.cursor = 'grab'; // Reset cursor
-                 }
-                 if (this.activePointers.size === 0) {
-                     // Reset cursor if it was grabbing
-                     if (this.viewerContainer.style.cursor === 'grabbing') {
-                         this.viewerContainer.style.cursor = 'grab';
-                     }
-                     this.scheduleUiHide(); // Schedule UI hide only when all pointers are up
-                 }
-            }
-
-            handlePointerCancel(e) {
-                if (this.activePointers.has(e.pointerId)) {
-                    e.target.releasePointerCapture(e.pointerId);
-                    this.activePointers.delete(e.pointerId);
-                    console.log("Pointer cancelled:", e.pointerId);
-
-                    // Reset states if cancellation disrupts interaction
-                    if (this.isZooming && this.activePointers.size < 2) this.isZooming = false;
-                    if (this.isPanning && this.activePointers.size === 0) this.isPanning = false;
-
-                    // Reset to base state if needed
-                    if (this.activePointers.size === 0) {
-                         if (this.scale < 1.05) this.resetZoom(); // Reset zoom if slightly zoomed
-                        this.viewerContainer.style.cursor = 'grab';
-                        this.scheduleUiHide();
-                    }
-                 }
-            }
-
-
-             // --- Zooming and Panning Logic ---
-             updateZoom(useTransition = false) {
-                 // Apply transition only when specifically requested (e.g., reset, double tap)
-                 this.zoomContainer.style.transition = useTransition ? 'transform 0.3s ease' : 'none';
-
-                 // Use translate3d for potential hardware acceleration
-                 this.zoomContainer.style.transform = `translate3d(${this.translateX}px, ${this.translateY}px, 0) scale(${this.scale})`;
-            }
-
-
-            resetZoom() {
-                if (this.scale !== 1 || this.translateX !== 0 || this.translateY !== 0) {
-                    this.scale = 1;
-                    this.translateX = 0;
-                    this.translateY = 0;
-                    this.updateZoom(true); // Reset with transition
-                }
-            }
-
-             applyPanBoundaries() {
-                // Ensure we have valid dimensions, especially during initialization
-                 const containerWidth = this.viewerContainer.clientWidth;
-                 const containerHeight = this.viewerContainer.clientHeight;
-                 if (!containerWidth || !containerHeight || this.scale <= 1) {
-                     // No panning needed if not zoomed or container size is zero
-                     this.translateX = 0;
-                     this.translateY = 0;
-                     return;
-                 }
-
-                // Calculate the visible content dimensions at the current scale
-                 const contentWidth = containerWidth * this.scale;
-                 const contentHeight = containerHeight * this.scale;
-
-                // Calculate maximum allowed translation from center
-                // Max distance the edge of the scaled content can be from the edge of the container
-                const maxTranslateX = Math.max(0, (contentWidth - containerWidth) / 2);
-                const maxTranslateY = Math.max(0, (contentHeight - containerHeight) / 2);
-
-
-                // Clamp translation values within the calculated bounds
-                this.translateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, this.translateX));
-                this.translateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, this.translateY));
-            }
-
-
-            // --- Keyboard and Resize ---
-            handleKeyDown(e) {
-                 if (!this.isInitialized) return; // Ignore keys before init
-                 // Do not interfere if user is typing in an input field (if any were added)
-                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-                 // Close episode modal on Escape
-                 if (e.key === 'Escape' && this.episodeOverlay.classList.contains('active')) {
-                    this.hideEpisodeList();
-                     e.preventDefault(); // Prevent other escape actions
-                    return;
-                 }
-
-                switch (e.key) {
-                    case 'ArrowLeft':
-                         e.preventDefault();
-                         this.prevPage();
-                         break;
-                    case 'ArrowRight':
-                         e.preventDefault();
-                         this.nextPage();
-                         break;
-                    case ' ': // Spacebar for next page (common reader behavior)
-                         e.preventDefault();
-                         this.nextPage();
-                        break;
-                    case 'PageDown':
-                        e.preventDefault();
-                        this.nextPage();
-                        break;
-                    case 'PageUp':
-                        e.preventDefault();
-                        this.prevPage();
-                        break;
-                    case 'Home':
-                        e.preventDefault();
-                        this.goToPage(0);
-                        break;
-                    case 'End':
-                        e.preventDefault();
-                        this.goToPage(this.totalPages - 1);
-                        break;
-                     case 'f': // 'f' for fullscreen toggle
-                     case 'F11': // Standard fullscreen key
-                         e.preventDefault();
-                         this.toggleFullscreen();
-                         break;
-                    case 'Escape':
-                         // Hide UI if visible (and modal not open)
-                         if (this.isUIVisible) {
-                            this.hideUI();
-                            e.preventDefault();
-                         }
-                        break;
-                    case '+': // Zoom in
-                         // TODO: Implement keyboard zoom?
-                         break;
-                     case '-': // Zoom out
-                         // TODO: Implement keyboard zoom?
-                         break;
-                }
-            }
-
-            handleResize() {
-                 if (!this.isInitialized) return;
-                // Reset zoom and re-apply boundaries on resize
-                this.resetZoom();
-                this.applyPanBoundaries(); // Re-calculate boundaries for new size
-                 this.updateZoom(); // Apply immediately
-                 // UI might need adjustment if layout changes drastically
-            }
-        } // End of MangaViewer Class
-
-        // Initialize viewer once DOM is ready
-        document.addEventListener('DOMContentLoaded', () => {
-            // Ensure only one instance is created
-            if (!window.mangaViewerInstance) {
-                window.mangaViewerInstance = new MangaViewer();
-            }
-        });
-    </script>
+  </div>
+</div>
+<script>
+/*****************************************************************/
+/*                     ❖  Image Pool Class  ❖                     */
+/*****************************************************************/
+class ImagePool{
+  constructor(){this.map=new Map()}
+  load(url){
+    if(this.map.has(url))return this.map.get(url);
+    const img=new Image();img.decoding='async';img.src=url;this.map.set(url,img);return img;
+  }
+}
+/*****************************************************************/
+/*                   ❖  Manga Viewer Class  ❖                     */
+/*****************************************************************/
+class MangaViewer{
+  constructor(){
+    /*–––––– DOM ––––––*/
+    const $=id=>document.getElementById(id);
+    this.wrap=$("viewer");this.zoom=$("zoom");this.page=$("page");
+    this.top=$("top");this.bottom=$("bottom");this.counter=$("counter");this.title=$("title");
+    this.prevBtn=$("prev-btn");this.nextBtn=$("next-btn");
+    this.slider=$("page-slider");this.fsBtn=$("fs-btn");this.fsIn=$("fs-in");this.fsOut=$("fs-out");
+    this.epBtn=$("ep-btn");
+    this.prevZone=$("prev-zone");this.nextZone=$("next-zone");this.centerZone=$("center-zone");
+    this.spinner=$("spinner");this.err=$("error");this.errText=$("err-text");this.retryBtn=$("retry");
+    this.modal=$("modal");this.epList=$("ep-list");this.modalClose=$("modal-close");
+
+    /*–––––– State ––––––*/
+    this.scale=1;this.tx=0;this.ty=0;this.needRender=false;
+    this.pageIdx=0;this.total=0;this.pages=[];this.dir='rtl';
+    this.containerW=0;this.containerH=0;this.isUI=true;
+    this.activePtr=new Map();this.pinchDist0=0;this.scale0=1;
+    this.loading=false;this.imagePool=new ImagePool();
+    /* Mock data (replace with API) */
+    this.mockData={
+      id:'manga123',title:'KARMA',reading_direction:'rtl',frontMatter:[{page_number:1,image_url:'i_001.jpg'}],episodes:[{id:'ep1',title:'第1話',pages:[{page_number:2,image_url:'i_002.jpg'},{page_number:3,image_url:'i_003.jpg'}]}]
+    };
+
+    this.init();
+  }
+  /**********  Init  **********/
+  init(){
+    this.bindUI();this.updateMetrics();this.fetchData();requestAnimationFrame(()=>this.render());
+  }
+  /**********  Metrics  **********/
+  updateMetrics(){const r=this.wrap.getBoundingClientRect();this.containerW=r.width;this.containerH=r.height}
+  /**********  RAF Render  **********/
+  schedule(){this.needRender=true}
+  render(){if(this.needRender){this.zoom.style.transform=`translate3d(${this.tx}px,${this.ty}px,0) scale(${this.scale})`;this.needRender=false}requestAnimationFrame(()=>this.render())}
+  /**********  Data  **********/
+  async fetchData(){this.spinner.style.display='block';try{
+      const d=await new Promise(res=>setTimeout(()=>res(this.mockData),400));
+      this.dir=d.reading_direction||'rtl';this.title.textContent=d.title;this.pages=[...d.frontMatter,...d.episodes.flatMap(e=>e.pages)];
+      this.total=this.pages.length;this.slider.max=this.total;this.slider.disabled=false;this.epBtn.disabled=false;this.loadPage(0);
+    }catch(e){this.showError('データ読み込み失敗');}
+    finally{this.spinner.style.display='none'}
+  }
+  /**********  Page Loading  **********/
+  async loadPage(i){if(i<0||i>=this.total||this.loading)return;this.loading=true;this.spinner.style.display='block';
+    const url=this.pages[i].image_url;try{
+      await this.imagePool.load(url).decode();this.page.src=url;this.page.dataset.url=url;this.pageIdx=i;this.updateCounter();this.preload(i);
+    }catch(e){this.showError('画像読み込み失敗');}
+    finally{this.loading=false;this.spinner.style.display='none'}
+  }
+  preload(i){const depth=2;const set=new Set();for(let k=1;k<=depth;k++){let n=(this.dir==='rtl'?i-k:i+k);if(n>=0&&n<this.total)set.add(n);let p=(this.dir==='rtl'?i+k:i-k);if(p>=0&&p<this.total)set.add(p)}
+    set.forEach(idx=>{const url=this.pages[idx].image_url;if('requestIdleCallback'in window){requestIdleCallback(()=>this.imagePool.load(url),{timeout:1200})}else{this.imagePool.load(url)}})}
+  /**********  Counter & Buttons  **********/
+  updateCounter(){this.counter.textContent=`${this.pageIdx+1}/${this.total}`;this.slider.value=this.pageIdx+1;this.prevBtn.disabled=this.pageIdx===0;this.nextBtn.disabled=this.pageIdx===this.total-1;this.prevZone.style.pointerEvents=this.prevBtn.disabled?'none':'auto';this.nextZone.style.pointerEvents=this.nextBtn.disabled?'none':'auto'}
+  /**********  Navigation  **********/
+  prev(){this.loadPage(this.pageIdx-1)}
+  next(){this.loadPage(this.pageIdx+1)}
+  goto(i){this.loadPage(i)}
+  /**********  UI  **********/
+  showUI(){this.wrap.classList.add('show-ui');this.isUI=true;clearTimeout(this.uiTimer);this.uiTimer=setTimeout(()=>this.hideUI(),3000)}
+  hideUI(){if(this.modal.classList.contains('active'))return;this.wrap.classList.remove('show-ui');this.isUI=false}
+  toggleUI(){this.isUI?this.hideUI():this.showUI()}
+  /**********  FS  **********/
+  toggleFS(){if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()||document.documentElement.webkitRequestFullscreen?.()}else{document.exitFullscreen?.()||document.webkitExitFullscreen?.()}}
+  updateFSIcon(){const fs=!!document.fullscreenElement||!!document.webkitFullscreenElement;this.fsIn.style.display=fs?'none':'block';this.fsOut.style.display=fs?'block':'none';this.fsBtn.setAttribute('aria-label',fs?'Exit full‑screen':'Full‑screen')}
+  /**********  Episodes  **********/
+  showEp(){this.epList.innerHTML='';let start=0;for(const ep of [{id:'front',title:'表紙',total:this.pages.length}]){const div=document.createElement('div');div.className='ep-item';div.textContent=ep.title;div.dataset.page=start;div.onclick=()=>{this.goto(+div.dataset.page);this.hideEp()};if(this.pageIdx>=start&&this.pageIdx<start+ep.total)div.classList.add('current');this.epList.appendChild(div);start+=ep.total}
+    this.modal.classList.add('active');this.modalClose.focus();clearTimeout(this.uiTimer)}
+  hideEp(){this.modal.classList.remove('active');this.showUI()}
+  /**********  Error  **********/
+  showError(msg){this.errText.textContent=msg;this.err.style.display='block'}
+  hideError(){this.err.style.display='none'}
+  /**********  Events  **********/
+  bindUI(){const on=(el,ev,fn,opts)=>el.addEventListener(ev,fn,opts);
+    /* Delegated bottom buttons */
+    on(this.bottom,'click',e=>{const b=e.target.closest('.btn');if(!b||b.disabled)return;switch(b.id){case'prev-btn':this.prev();break;case'next-btn':this.next();break;case'fs-btn':this.toggleFS();break;case'ep-btn':this.showEp();break}});
+    /* Zones */
+    on(this.prevZone,'click',()=>this.prev());on(this.nextZone,'click',()=>this.next());on(this.centerZone,'click',()=>this.toggleUI());
+    /* Slider */
+    on(this.slider,'input',()=>{this.counter.textContent=`${this.slider.value}/${this.total}`;this.showUI();clearTimeout(this.uiTimer)});
+    on(this.slider,'change',()=>this.goto(this.slider.value-1));
+    /* Retry */
+    on(this.retryBtn,'click',()=>{this.hideError();this.loadPage(this.pageIdx)});
+    /* Modal */
+    on(this.modalClose,'click',()=>this.hideEp());on(this.modal,'click',e=>{if(e.target===this.modal)this.hideEp()});
+    /* Resize */
+    on(window,'resize',()=>{this.updateMetrics();this.resetZoom()});
+    /* FS */
+    on(document,'fullscreenchange',()=>this.updateFSIcon());on(document,'webkitfullscreenchange',()=>this.updateFSIcon());
+    /* Keyboard */
+    on(document,'keydown',e=>{if(['INPUT','TEXTAREA'].includes(e.target.tagName))return;switch(e.key){case'ArrowLeft':case'PageUp':this.prev();break;case'ArrowRight':case'PageDown':this.next();break;case'f':case'F11':this.toggleFS();break;case' ':this.next();break;case'Home':this.goto(0);break;case'End':this.goto(this.total-1);break;case'Escape':if(this.modal.classList.contains('active')){this.hideEp()}else{this.toggleUI()}break}});
+    /* Pointer */
+    const opts={passive:false};on(this.wrap,'pointerdown',e=>this.ptrDown(e),opts);on(this.wrap,'pointermove',e=>this.ptrMove(e),opts);on(this.wrap,'pointerup',e=>this.ptrEnd(e));on(this.wrap,'pointercancel',e=>this.ptrEnd(e));
+  }
+  /**********  Pointer Logic  **********/
+  ptrDown(e){if(e.button!==0)return;this.activePtr.set(e.pointerId,{x:e.clientX,y:e.clientY});e.target.setPointerCapture(e.pointerId);this.touchX0=e.clientX;this.touchY0=e.clientY;this.panX0=this.tx;this.panY0=this.ty;this.showUI();}
+  ptrMove(e){if(!this.activePtr.has(e.pointerId))return;this.activePtr.set(e.pointerId,{x:e.clientX,y:e.clientY});if(this.activePtr.size===2){e.preventDefault();const pts=[...this.activePtr.values()];const dist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);if(!this.pinchDist0){this.pinchDist0=dist;this.scale0=this.scale;const rect=this.wrap.getBoundingClientRect();this.cx=((pts[0].x+pts[1].x)/2)-rect.left;this.cy=((pts[0].y+pts[1].y)/2)-rect.top}
+      const sf=dist/this.pinchDist0;this.scale=Math.min(5,Math.max(1,this.scale0*sf));const dS=this.scale-this.scale0;const ox=(this.cx-this.tx)/this.scale0;const oy=(this.cy-this.ty)/this.scale0;this.tx-=ox*dS;this.ty-=oy*dS;this.bound();this.schedule();}
+    else if(this.activePtr.size===1&&this.scale>1){e.preventDefault();const dx=e.clientX-this.touchX0;const dy=e.clientY-this.touchY0;this.tx=this.panX0+dx;this.ty=this.panY0+dy;this.bound();this.schedule();}}
+  ptrEnd(e){if(!this.activePtr.has(e.pointerId))return;this.activePtr.delete(e.pointerId);e.target.releasePointerCapture(e.pointerId);this.pinchDist0=0;this.bound();if(this.activePtr.size===0){this.schedule();this.hideUI();}}
+  /**********  Helpers  **********/
+  bound(){if(this.scale<=1){this.tx=this.ty=0;return;}const maxX=(this.containerW*this.scale-this.containerW)/2;const maxY=(this.containerH*this.scale-this.containerH)/2;this.tx=Math.max(-maxX,Math.min(maxX,this.tx));this.ty=Math.max(-maxY,Math.min(maxY,this.ty));}
+  resetZoom(){this.scale=1;this.tx=this.ty=0;this.schedule()}
+}
+/*****************************************************************/
+/*                         ❖  Boot  ❖                           */
+/*****************************************************************/
+window.addEventListener('DOMContentLoaded',()=>{window.viewer||(window.viewer=new MangaViewer())});
+</script>
 </body>
-
 </html>
