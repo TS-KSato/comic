@@ -915,7 +915,7 @@
             prevPage() {
                 // In RTL, prev button/zone goes to higher index (visually next page)
                 if (this.readingDirection === 'rtl') {
-                    this.goToPage(this.currentPageIndex + 1);
+                    this.goToPage(this.currentPageIndex - 1);
                 } else {
                     this.goToPage(this.currentPageIndex - 1);
                 }
@@ -925,7 +925,7 @@
             nextPage() {
                 // In RTL, next button/zone goes to lower index (visually previous page)
                  if (this.readingDirection === 'rtl') {
-                     this.goToPage(this.currentPageIndex - 1);
+                     this.goToPage(this.currentPageIndex + 1);
                  } else {
                      this.goToPage(this.currentPageIndex + 1);
                  }
@@ -1289,7 +1289,7 @@
                     if (Math.abs(deltaX) > swipeThreshold && Math.abs(deltaY) < verticalThreshold) {
                         // Horizontal swipe detected
                         if (deltaX > 0) { // Swiped right
-                             if (this.readingDirection === 'rtl') this.nextPage(); else this.prevPage();
+                             if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage();
                          } else { // Swiped left
                              if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage();
                          }
@@ -1402,13 +1402,13 @@
 
                 switch (e.key) {
                     case 'ArrowLeft':
-                         e.preventDefault(); // Prevent browser back navigation
-                         if (this.readingDirection === 'rtl') this.nextPage(); else this.prevPage();
-                        break;
+                         e.preventDefault();
+                         this.prevPage();
+                         break;
                     case 'ArrowRight':
-                         e.preventDefault(); // Prevent browser forward navigation
-                         if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage();
-                        break;
+                         e.preventDefault();
+                         this.nextPage();
+                         break;
                     case ' ': // Spacebar for next page (common reader behavior)
                          e.preventDefault();
                          this.nextPage();
