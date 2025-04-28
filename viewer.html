@@ -425,6 +425,14 @@
             background: none;
             /* Override hover */
         }
+        .rtl #page-slider{
+            direction: rtl;
+            transform: scaleX(-1);
+        }
+        
+        .rtl #page-slider::-webkit-slider-thumb{
+            transform: scaleX(-1);
+        }
     </style>
 </head>
 <body>
@@ -775,6 +783,11 @@
                                 pageCount += episode.pages.length;
                             }
                         });
+                    }
+                    if (this.readingDirection === 'rtl') {
+                        this.viewerContainer.classList.add('rtl');
+                    } else {
+                        this.viewerContainer.classList.remove('rtl');
                     }
                     // --- End Processing ---
 
