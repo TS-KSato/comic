@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -425,16 +426,24 @@
             background: none;
             /* Override hover */
         }
-        .rtl #page-slider{
-            direction: rtl;
+
+        .rtl #page-slider {
             transform: scaleX(-1);
         }
-        
-        .rtl #page-slider::-webkit-slider-thumb{
+
+        @supports (-moz-appearance: none) {
+            .rtl #page-slider {
+                transform: none;
+                direction: rtl;
+            }
+        }
+
+        .rtl #page-slider::-webkit-slider-thumb {
             transform: scaleX(-1);
         }
     </style>
 </head>
+
 <body>
     <!-- Start with UI hidden, show after load -->
     <div id="viewer-container">
@@ -443,7 +452,9 @@
             <!-- Manga page container (Simplified: Only one page element needed) -->
             <div id="manga-page-container">
                 <!-- Set initial src to avoid broken image, or use placeholder -->
-                <img alt="Manga page" class="manga-page" id="current-page" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"> <!-- Transparent 1x1 GIF -->
+                <img alt="Manga page" class="manga-page" id="current-page"
+                    src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+                <!-- Transparent 1x1 GIF -->
             </div>
         </div>
         <!-- Navigation zones -->
@@ -463,7 +474,8 @@
                 </svg>
             </button>
             <div id="page-slider-container">
-                <input type="range" min="1" max="1" value="1" id="page-slider" aria-label="Page Slider" disabled> <!-- Start disabled -->
+                <input type="range" min="1" max="1" value="1" id="page-slider" aria-label="Page Slider" disabled>
+                <!-- Start disabled -->
             </div>
             <button class="ui-button" id="next-button" aria-label="Next Page" disabled> <!-- Start disabled -->
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -490,7 +502,8 @@
             </div>
         </div>
         <!-- Episode Selection Modal -->
-        <div id="episode-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="episode-modal-title">
+        <div id="episode-overlay" class="modal-overlay" role="dialog" aria-modal="true"
+            aria-labelledby="episode-modal-title">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2 id="episode-modal-title">エピソード選択</h2>
@@ -509,7 +522,7 @@
             <button id="retry-button">再試行</button>
         </div>
     </div>
-        <script>
+    <script>
         // --- 定数の定義 ---
         const UI_HIDE_DELAY_MS = 3000;
         const DOUBLE_TAP_TIMEOUT_MS = 300;
@@ -615,7 +628,7 @@
                 this.activePointers = new Map();
 
                 // --- Mock Manga Data --- (Keep for standalone testing)
-                 this.mockMangaData = {
+                this.mockMangaData = {
                     id: 'manga123',
                     title: 'KARMA',
                     frontMatter: [
@@ -663,8 +676,8 @@
             }
 
             setupEventListeners() {
-                 // Use event delegation where possible
-                 this.bottomOverlay.addEventListener('click', (e) => {
+                // Use event delegation where possible
+                this.bottomOverlay.addEventListener('click', (e) => {
                     if (!this.isInitialized) return;
                     const target = e.target.closest('.ui-button');
                     if (!target || target.disabled) return;
@@ -687,11 +700,11 @@
                 this.retryButton.addEventListener('click', this.retryLoad.bind(this));
 
                 // Episode modal close button
-                 this.closeEpisodeButton.addEventListener('click', this.hideEpisodeList.bind(this));
-                 // Close modal if clicking outside the content
-                 this.episodeOverlay.addEventListener('click', (e) => {
-                     if (e.target === this.episodeOverlay) { this.hideEpisodeList(); }
-                 });
+                this.closeEpisodeButton.addEventListener('click', this.hideEpisodeList.bind(this));
+                // Close modal if clicking outside the content
+                this.episodeOverlay.addEventListener('click', (e) => {
+                    if (e.target === this.episodeOverlay) { this.hideEpisodeList(); }
+                });
 
                 // Pointer events for touch, mouse, pen
                 this.viewerContainer.addEventListener('pointerdown', this.handlePointerDown.bind(this));
@@ -1047,7 +1060,7 @@
                             localStorage.removeItem(key);
                         }
                     } else {
-                         // console.log(`No bookmark found for key: ${key}`);
+                        // console.log(`No bookmark found for key: ${key}`);
                     }
                     this.currentPageIndex = 0;
                 } catch (error) {
@@ -1066,10 +1079,10 @@
                         this.pageSlider.disabled = true;
                         this.pageSlider.removeAttribute('aria-valuetext');
                     }
-                    if(this.prevButton) this.prevButton.disabled = true;
-                    if(this.nextButton) this.nextButton.disabled = true;
-                    if(this.prevZone) this.prevZone.style.pointerEvents = 'none';
-                    if(this.nextZone) this.nextZone.style.pointerEvents = 'none';
+                    if (this.prevButton) this.prevButton.disabled = true;
+                    if (this.nextButton) this.nextButton.disabled = true;
+                    if (this.prevZone) this.prevZone.style.pointerEvents = 'none';
+                    if (this.nextZone) this.nextZone.style.pointerEvents = 'none';
                     return;
                 }
 
@@ -1172,7 +1185,7 @@
                         imgElement.dataset.imageUrl = 'error';
                         imgElement.setAttribute('data-load-error', 'true');
                         let filename = 'file';
-                        try { filename = new URL(src).pathname.split('/').pop() || 'file'; } catch (e) {}
+                        try { filename = new URL(src).pathname.split('/').pop() || 'file'; } catch (e) { }
                         reject(new Error(`Image (${filename}) failed to load.`));
                     };
 
@@ -1282,10 +1295,10 @@
                 const startPointerData = this.activePointers.get(pointerId); // Get start data
 
                 try {
-                     // Check if capture exists before releasing
-                     if (e.target.hasPointerCapture && e.target.hasPointerCapture(pointerId)) {
+                    // Check if capture exists before releasing
+                    if (e.target.hasPointerCapture && e.target.hasPointerCapture(pointerId)) {
                         e.target.releasePointerCapture(pointerId);
-                     }
+                    }
                 } catch (err) {
                     console.warn("Failed to release pointer:", err.message);
                 }
@@ -1295,9 +1308,9 @@
                 let isDoubleTap = false;
 
                 // --- Double Tap ---
-                 if (this.activePointers.size === 0 && e.pointerType !== 'mouse' &&
-                     tapInterval < this.DOUBLE_TAP_TIMEOUT_MS && startPointerData && (pointerUpTime - startPointerData.startTime) < this.DOUBLE_TAP_TIMEOUT_MS
-                      /* && tapInterval > this.MIN_TAP_DURATION_MS */ ) { // Check tap duration too
+                if (this.activePointers.size === 0 && e.pointerType !== 'mouse' &&
+                    tapInterval < this.DOUBLE_TAP_TIMEOUT_MS && startPointerData && (pointerUpTime - startPointerData.startTime) < this.DOUBLE_TAP_TIMEOUT_MS
+                      /* && tapInterval > this.MIN_TAP_DURATION_MS */) { // Check tap duration too
 
                     isDoubleTap = true;
                     const rect = this.viewerContainer.getBoundingClientRect();
@@ -1339,22 +1352,22 @@
 
                         // Horizontal swipe detected
                         if (deltaX > 0) { // Swiped right (指を右に動かした)
-                             console.log("Swipe Right detected");
-                             if (this.readingDirection === 'rtl') {
-                                 this.prevPage();
-                             } else {
-                                 this.nextPage();
-                             }
-                         } else { // Swiped left (指を左に動かした)
-                              console.log("Swipe Left detected");
-                             if (this.readingDirection === 'rtl') {
-                                 this.prevPage();
-                             } else {
-                                 this.nextPage();
-                             }
-                         }
-                         // Prevent swipe from also triggering click on nav zones if needed
-                         // e.preventDefault(); // Use with caution
+                            console.log("Swipe Right detected");
+                            if (this.readingDirection === 'rtl') {
+                                this.prevPage();
+                            } else {
+                                this.nextPage();
+                            }
+                        } else { // Swiped left (指を左に動かした)
+                            console.log("Swipe Left detected");
+                            if (this.readingDirection === 'rtl') {
+                                this.prevPage();
+                            } else {
+                                this.nextPage();
+                            }
+                        }
+                        // Prevent swipe from also triggering click on nav zones if needed
+                        // e.preventDefault(); // Use with caution
                     }
                 }
 
@@ -1383,7 +1396,7 @@
                     try {
                         // Check if capture exists before releasing
                         if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
-                           e.target.releasePointerCapture(e.pointerId);
+                            e.target.releasePointerCapture(e.pointerId);
                         }
                     } catch (err) {
                         console.warn("Failed to release cancelled pointer:", err.message);
@@ -1403,14 +1416,14 @@
 
                     // Reset to base state if needed (e.g., slight zoom)
                     if (this.activePointers.size === 0) {
-                         if (this.scale < 1.05 && this.scale > 0.95) {
+                        if (this.scale < 1.05 && this.scale > 0.95) {
                             console.log("Resetting zoom after cancel.");
                             this.resetZoom();
                         }
                         this.viewerContainer.style.cursor = 'grab';
                         this.scheduleUiHide(); // Schedule hide if interaction fully cancelled
                     }
-                 }
+                }
             }
 
 
@@ -1450,8 +1463,8 @@
                 if (e.key === 'Escape' && this.episodeOverlay.classList.contains('active')) {
                     this.hideEpisodeList(); e.preventDefault(); this.episodeButton.focus(); return;
                 }
-                const prevAction = this.readingDirection === 'rtl' ? this.nextPage : this.prevPage;
-                const nextAction = this.readingDirection === 'rtl' ? this.prevPage : this.nextPage;
+                const prevAction = this.prevPage.bind(this);
+                const nextAction = this.nextPage.bind(this);
                 let pageChanged = false;
                 switch (e.key) {
                     case 'ArrowLeft': case 'PageUp': e.preventDefault(); prevAction.call(this); pageChanged = true; break;
@@ -1491,4 +1504,5 @@
         });
     </script>
 </body>
+
 </html>
