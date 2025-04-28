@@ -689,7 +689,6 @@
                 this.viewerContainer.addEventListener('pointerdown', this.handlePointerDown.bind(this));
                 this.viewerContainer.addEventListener('pointermove', this.handlePointerMove.bind(this), { passive: false }); // Need preventDefault
                 this.viewerContainer.addEventListener('pointerup', this.handlePointerEnd.bind(this));
-                // ★★★ handlePointerCancel を呼び出すため、メソッドが存在する必要がある ★★★
                 this.viewerContainer.addEventListener('pointercancel', this.handlePointerCancel.bind(this)); // Handle interruptions
 
                 // Keyboard navigation
@@ -1329,16 +1328,16 @@
                         if (deltaX > 0) { // Swiped right (指を右に動かした)
                              console.log("Swipe Right detected");
                              if (this.readingDirection === 'rtl') {
-                                 this.nextPage(); // RTL: 右スワイプ -> 次のページ (index減)
+                                 this.prevPage();
                              } else {
-                                 this.prevPage(); // LTR: 右スワイプ -> 前のページ (index減)
+                                 this.nextPage();
                              }
                          } else { // Swiped left (指を左に動かした)
                               console.log("Swipe Left detected");
                              if (this.readingDirection === 'rtl') {
-                                 this.prevPage(); // RTL: 左スワイプ -> 前のページ (index増)
+                                 this.prevPage();
                              } else {
-                                 this.nextPage(); // LTR: 左スワイプ -> 次のページ (index増)
+                                 this.nextPage();
                              }
                          }
                          // Prevent swipe from also triggering click on nav zones if needed
@@ -1365,8 +1364,6 @@
                     this.scheduleUiHide();
                 }
             }
-
-            // ★★★ handlePointerCancel メソッドを追加 ★★★
             handlePointerCancel(e) {
                 if (this.activePointers.has(e.pointerId)) {
                     console.log("Pointer cancelled:", e.pointerId);
