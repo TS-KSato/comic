@@ -1297,55 +1297,109 @@
                 }
             }
 
-            handlePointerEnd(e) {
-                if (!this.activePointers.has(e.pointerId) || !this.isInitialized) return;
-                const pointerUpTime = Date.now(); const pointerId = e.pointerId;
-                const startPointerData = this.activePointers.get(pointerId);
-                try { e.target.releasePointerCapture(pointerId); }
-                catch (err) { console.warn("Failed to release pointer:", err.message); }
-                this.activePointers.delete(pointerId);
-                const tapInterval = pointerUpTime - this.lastTapTime; let isDoubleTap = false;
-                if (this.activePointers.size === 0 && e.pointerType !== 'mouse' &&
-                    tapInterval < this.DOUBLE_TAP_TIMEOUT_MS && startPointerData && (pointerUpTime - startPointerData.startTime) < this.DOUBLE_TAP_TIMEOUT_MS) {
-                    isDoubleTap = true; const rect = this.viewerContainer.getBoundingClientRect();
-                    const tapX = e.clientX - rect.left; const tapY = e.clientY - rect.top;
-                    if (this.scale <= 1.1) {
-                        const targetScale = this.DOUBLE_TAP_ZOOM_SCALE; const containerCenterX = this.viewerContainer.clientWidth / 2; const containerCenterY = this.viewerContainer.clientHeight / 2;
-                        this.translateX = containerCenterX - (tapX * targetScale); this.translateY = containerCenterY - (tapY * targetScale); this.scale = targetScale; console.log("Double tap zoom IN");
-                    } else { this.resetZoom(); console.log("Double tap zoom OUT"); }
-                    this.applyPanBoundaries(); this.updateZoom(true);
+                    handlePointerEnd(e) {
+            if (!this.activePointers.has(e.pointerId) || !this.isInitialized) return;
+
+            const pointerUpTime = Date.now();
+            const pointerId = e.pointerId;
+            const startPointerData = this.activePointers.get(pointerId); // Get start data
+
+            try {
+                 // Check if capture exists before releasing
+                 if (e.target.hasPointerCapture && e.target.hasPointerCapture(pointerId)) {
+                    e.target.releasePointerCapture(pointerId);
+                 }
+            } catch (err) {
+                console.warn("Failed to release pointer:", err.message);
+            }
+            this.activePointers.delete(pointerId);
+
+            const tapInterval = pointerUpTime - this.lastTapTime;
+            let isDoubleTap = false;
+
+            // --- Double Tap ---
+             if (this.activePointers.size === 0 && e.pointerType !== 'mouse' &&
+                 tapInterval < this.DOUBLE_TAP_TIMEOUT_MS && startPointerData && (pointerUpTime - startPointerData.startTime) < this.DOUBLE_TAP_TIMEOUT_MS
+                  /* && tapInterval > this.MIN_TAP_DURATION_MS */ ) { // Check tap duration too
+
+                isDoubleTap = true;
+                const rect = this.viewerContainer.getBoundingClientRect();
+                const tapX = e.clientX - rect.left;
+                const tapY = e.clientY - rect.top;
+
+                if (this.scale <= 1.1) {
+                    const targetScale = this.DOUBLE_TAP_ZOOM_SCALE;
+                    const containerCenterX = this.viewerContainer.clientWidth / 2;
+                    const containerCenterY = this.viewerContainer.clientHeight / 2;
+                    this.translateX = containerCenterX - (tapX * targetScale);
+                    this.translateY = containerCenterY - (tapY * targetScale);
+                    this.scale = targetScale;
+                    console.log("Double tap zoom IN");
+                } else {
+                    this.resetZoom();
+                    console.log("Double tap zoom OUT");
                 }
-                if (this.activePointers.size === 0) { this.lastTapTime = pointerUpTime; }
-                if (!isDoubleTap && !this.isZooming && this.scale <= 1.1 && this.activePointers.size === 0 && startPointerData) {
-                    const deltaX = e.clientX - this.touchStartX; const deltaY = e.clientY - this.touchStartY; const swipeDuration = pointerUpTime - startPointerData.startTime;
-                    if (Math.abs(deltaX) > this.SWIPE_THRESHOLD_PX && Math.abs(deltaY) < this.SWIPE_VERTICAL_THRESHOLD_PX && swipeDuration < 500) {
-                        if (deltaX > 0) { console.log("Swipe Right detected"); if (this.readingDirection === 'rtl') this.nextPage(); else this.prevPage(); }
-                        else { console.log("Swipe Left detected"); if (this.readingDirection === 'rtl') this.prevPage(); else this.nextPage(); }
-                    }
-                }
-                if (this.isZooming && this.activePointers.size < 2) { this.isZooming = false; }
-                if (this.isPanning && this.activePointers.size === 0) { this.isPanning = false; this.viewerContainer.style.cursor = 'grab'; }
-                if (this.activePointers.size === 0) {
-                    if (this.scale < 1.05 && this.scale > 0.95 && !isDoubleTap) { this.resetZoom(); }
-                    if (this.viewerContainer.style.cursor === 'grabbing') { this.viewerContainer.style.cursor = 'grab'; }
-                    this.scheduleUiHide();
+                this.applyPanBoundaries();
+                this.updateZoom(true);
+            }
+            // Update lastTapTime for the *next* double tap detection
+            if (this.activePointers.size === 0) {
+                this.lastTapTime = pointerUpTime;
+            }
+
+
+            // --- Swipe Detection (RTL Handled - Corrected based on user feedback) ---
+            if (!isDoubleTap && !this.isZooming && this.scale <= 1.1 && this.activePointers.size === 0 && startPointerData) {
+                const touchEndX = e.clientX;
+                const touchEndY = e.clientY;
+                const deltaX = touchEndX - this.touchStartX; // Use start position from pointerdown
+                const deltaY = touchEndY - this.touchStartY;
+                const swipeDuration = pointerUpTime - startPointerData.startTime;
+
+                if (Math.abs(deltaX) > this.SWIPE_THRESHOLD_PX &&
+                    Math.abs(deltaY) < this.SWIPE_VERTICAL_THRESHOLD_PX &&
+                    swipeDuration < 500) { // Add duration limit
+
+                    // Horizontal swipe detected
+                    if (deltaX > 0) { // Swiped right (指を右に動かした)
+                         console.log("Swipe Right detected");
+                         if (this.readingDirection === 'rtl') {
+                             this.nextPage(); // RTL: 右スワイプ -> 次のページ (index減)
+                         } else {
+                             this.prevPage(); // LTR: 右スワイプ -> 前のページ (index減)
+                         }
+                     } else { // Swiped left (指を左に動かした)
+                          console.log("Swipe Left detected");
+                         if (this.readingDirection === 'rtl') {
+                             this.prevPage(); // RTL: 左スワイプ -> 前のページ (index増)
+                         } else {
+                             this.nextPage(); // LTR: 左スワイプ -> 次のページ (index増)
+                         }
+                     }
+                     // Prevent swipe from also triggering click on nav zones if needed
+                     // e.preventDefault(); // Use with caution
                 }
             }
 
-            handlePointerCancel(e) {
-                if (this.activePointers.has(e.pointerId)) {
-                    console.log("Pointer cancelled:", e.pointerId);
-                    try { e.target.releasePointerCapture(e.pointerId); }
-                    catch (err) { console.warn("Failed to release cancelled pointer:", err.message); }
-                    this.activePointers.delete(e.pointerId);
-                    if (this.isZooming && this.activePointers.size < 2) { this.isZooming = false; console.log("Zooming cancelled."); }
-                    if (this.isPanning && this.activePointers.size === 0) { this.isPanning = false; this.viewerContainer.style.cursor = 'grab'; console.log("Panning cancelled."); }
-                    if (this.activePointers.size === 0) {
-                        if (this.scale < 1.05 && this.scale > 0.95) { console.log("Resetting zoom after cancel."); this.resetZoom(); }
-                        this.viewerContainer.style.cursor = 'grab'; this.scheduleUiHide();
-                    }
-                }
+
+            // --- State Reset ---
+            if (this.isZooming && this.activePointers.size < 2) {
+                this.isZooming = false;
             }
+            if (this.isPanning && this.activePointers.size === 0) {
+                this.isPanning = false;
+                this.viewerContainer.style.cursor = 'grab';
+            }
+            if (this.activePointers.size === 0) {
+                if (this.scale < 1.05 && this.scale > 0.95 && !isDoubleTap) {
+                    this.resetZoom();
+                }
+                if (this.viewerContainer.style.cursor === 'grabbing') {
+                    this.viewerContainer.style.cursor = 'grab';
+                }
+                this.scheduleUiHide();
+            }
+        }
 
             // --- Zooming and Panning Logic ---
             updateZoom(useTransition = false) {
